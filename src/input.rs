@@ -1,13 +1,32 @@
-//! The crossterm boundary on the input side: map a `KeyEvent` to an engine `Action`.
+//! The crossterm boundary on the input side: map a `KeyEvent` to a `Command`.
 //!
-//! This is the ONLY input-side module that knows about crossterm. The engine consumes `Action`s, so
-//! everything downstream (tests, ghost replay, networking) stays terminal-agnostic.
+//! A `Command` is either an engine `Action` or a UI-level command (handled by the app, not the
+//! engine). Keeping all crossterm→intent mapping here means the engine never sees a crossterm type.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::engine::Action;
 
-/// Translate a key press into an `Action`, or `None` if the key is not bound.
+/// A mapped key press: an engine action, or a UI command the app handles directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Command {
+    /// Drive the typing engine.
+    Engine(Action),
+    /// Show/hide the discreet timer (stealth toggle).
+    ToggleTimer,
+}
+
+/// Translate a key press into a `Command`, or `None` if the key is not bound.
+pub fn map_key(key: KeyEvent) -> Option<Command> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    // UI hotkey first: Ctrl+T toggles the timer. It is never a typed character.
+    if ctrl && matches!(key.code, KeyCode::Char('t')) {
+        return Some(Command::ToggleTimer);
+    }
+    to_action(key).map(Command::Engine)
+}
+
+/// Translate a key press into an engine `Action`, or `None` if unbound.
 pub fn to_action(key: KeyEvent) -> Option<Action> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
@@ -34,10 +53,23 @@ mod tests {
     }
 
     #[test]
-    fn plain_char_is_typed() {
+    fn plain_char_maps_to_engine_type() {
         assert_eq!(
-            to_action(key(KeyCode::Char('a'), KeyModifiers::NONE)),
-            Some(Action::Type('a'))
+            map_key(key(KeyCode::Char('a'), KeyModifiers::NONE)),
+            Some(Command::Engine(Action::Type('a')))
+        );
+    }
+
+    #[test]
+    fn ctrl_t_toggles_the_timer() {
+        assert_eq!(
+            map_key(key(KeyCode::Char('t'), KeyModifiers::CONTROL)),
+            Some(Command::ToggleTimer)
+        );
+        // lowercase t without ctrl is just typed.
+        assert_eq!(
+            map_key(key(KeyCode::Char('t'), KeyModifiers::NONE)),
+            Some(Command::Engine(Action::Type('t')))
         );
     }
 
@@ -68,7 +100,7 @@ mod tests {
     #[test]
     fn unbound_ctrl_combo_is_ignored() {
         assert_eq!(
-            to_action(key(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+            map_key(key(KeyCode::Char('a'), KeyModifiers::CONTROL)),
             None
         );
     }

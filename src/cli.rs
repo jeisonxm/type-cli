@@ -30,6 +30,10 @@ pub struct Cli {
     /// Override the color theme by name (e.g. --theme dracula).
     #[arg(long, global = true, value_name = "NAME")]
     pub theme: Option<String>,
+
+    /// Start with the discreet timer visible (toggle anytime in-game with Ctrl+T).
+    #[arg(long, global = true)]
+    pub show_timer: bool,
 }
 
 #[derive(Subcommand, Debug)]

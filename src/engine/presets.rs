@@ -13,7 +13,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// A short label for banners / results (e.g. `"60s"`, `"100w"`).
+    /// A short label for the timer / results (e.g. `"60s"`, `"100w"`).
     pub fn label(&self) -> String {
         match self {
             Mode::Time { secs } => format!("{secs}s"),

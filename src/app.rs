@@ -30,6 +30,8 @@ pub struct App {
     pub state: AppState,
     /// Frozen results, computed once when the test finishes.
     pub summary: Option<Summary>,
+    /// Whether the discreet timer is currently visible (toggled with Ctrl+T).
+    pub show_timer: bool,
     /// Clock baseline for the current session.
     session_start: Instant,
     pub should_quit: bool,
@@ -41,6 +43,7 @@ impl App {
         mode: Mode,
         source: SourceKind,
         doc_text: Option<String>,
+        show_timer: bool,
     ) -> Self {
         let session = Self::make_session(&source, doc_text.as_deref(), mode);
         App {
@@ -51,6 +54,7 @@ impl App {
             session,
             state: AppState::Typing,
             summary: None,
+            show_timer,
             session_start: Instant::now(),
             should_quit: false,
         }
@@ -87,8 +91,13 @@ impl App {
 
     /// Handle a key press.
     pub fn on_key(&mut self, key: KeyEvent) {
-        let Some(action) = input::to_action(key) else {
-            return;
+        let action = match input::map_key(key) {
+            None => return,
+            Some(input::Command::ToggleTimer) => {
+                self.show_timer = !self.show_timer;
+                return;
+            }
+            Some(input::Command::Engine(action)) => action,
         };
         match self.state {
             AppState::Typing => match action {

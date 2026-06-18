@@ -12,6 +12,7 @@ use crate::ui::theme::Theme;
 
 /// Embedded defaults (single source of truth, bundled into the binary).
 const DEFAULT_CONFIG: &str = include_str!("../assets/default_config.toml");
+const THEME_TERMINAL: &str = include_str!("../assets/themes/terminal.toml");
 const THEME_SERIKA: &str = include_str!("../assets/themes/serika_dark.toml");
 const THEME_DRACULA: &str = include_str!("../assets/themes/dracula.toml");
 const THEME_CLASSIC16: &str = include_str!("../assets/themes/classic16.toml");
@@ -19,6 +20,7 @@ const THEME_CLASSIC16: &str = include_str!("../assets/themes/classic16.toml");
 /// Look up a built-in theme's TOML by name.
 fn builtin_theme(name: &str) -> Option<&'static str> {
     match name {
+        "terminal" => Some(THEME_TERMINAL),
         "serika_dark" => Some(THEME_SERIKA),
         "dracula" => Some(THEME_DRACULA),
         "classic16" => Some(THEME_CLASSIC16),
@@ -134,7 +136,7 @@ fn load_theme(config_dir: &Path, name: &str) -> Theme {
             return t;
         }
     }
-    if let Ok(t) = Theme::from_toml(THEME_SERIKA) {
+    if let Ok(t) = Theme::from_toml(THEME_TERMINAL) {
         return t;
     }
     Theme::fallback()
@@ -184,17 +186,17 @@ impl Default for Settings {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Appearance {
+    /// Color theme name (built-in or in <config_dir>/themes/). Default blends with the terminal.
     pub theme: String,
-    pub figlet_font: String,
-    pub show_banner: bool,
+    /// Whether the (small, discreet) timer is visible on startup. Toggle at runtime with Ctrl+T.
+    pub show_timer: bool,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
         Appearance {
-            theme: "serika_dark".to_string(),
-            figlet_font: "standard".to_string(),
-            show_banner: true,
+            theme: "terminal".to_string(),
+            show_timer: false,
         }
     }
 }
@@ -252,7 +254,7 @@ pub enum PresetKind {
 }
 
 fn default_schema_version() -> u32 {
-    1
+    2
 }
 
 fn default_presets() -> Vec<Preset> {
@@ -266,14 +268,15 @@ mod tests {
     #[test]
     fn embedded_default_config_is_valid() {
         let s = Settings::embedded_default();
-        assert_eq!(s.schema_version, 1);
+        assert_eq!(s.schema_version, 2);
         assert_eq!(s.presets.len(), 5);
-        assert_eq!(s.appearance.theme, "serika_dark");
+        assert_eq!(s.appearance.theme, "terminal");
+        assert!(!s.appearance.show_timer); // hidden by default (stealth)
     }
 
     #[test]
     fn all_builtin_themes_parse() {
-        for name in ["serika_dark", "dracula", "classic16"] {
+        for name in ["terminal", "serika_dark", "dracula", "classic16"] {
             let toml = builtin_theme(name).unwrap();
             assert!(
                 Theme::from_toml(toml).is_ok(),
@@ -296,7 +299,7 @@ mod tests {
         let toml = "[appearance]\ntheme = \"dracula\"\n";
         let s: Settings = toml::from_str(toml).unwrap();
         assert_eq!(s.appearance.theme, "dracula");
-        assert_eq!(s.appearance.figlet_font, "standard"); // default
+        assert!(!s.appearance.show_timer); // default
         assert_eq!(s.game.language, "english"); // default
         assert_eq!(s.presets.len(), 5); // default presets
     }

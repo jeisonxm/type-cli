@@ -1,20 +1,22 @@
 # type-cli
 
-A fast, [monkeytype](https://monkeytype.com)-style **touch-typing game for the terminal**.
-Type along with live per-character coloring, pick your color theme and figlet banner, and turn any
-**PDF or Word document** into a typing challenge — all without leaving the terminal.
+A fast, [monkeytype](https://monkeytype.com)-style **touch-typing trainer for the terminal** — but
+**stealth**: it looks like you're just typing in your normal terminal while you practice. No banners,
+no background, no chrome; upcoming text is dimmed like a shell autosuggestion. Turn any **PDF or Word
+document** into a challenge, too.
 
-> Status: **Phase 1 (MVP) in progress.** See [`docs/ROADMAP.md`](docs/ROADMAP.md) and
+> Status: **Phase 1 (MVP) + stealth UI done.** See [`docs/ROADMAP.md`](docs/ROADMAP.md) and
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Features
 
 ### Phase 1 — MVP (current)
-- ⌨️  Monkeytype-style live typing: untyped / correct / incorrect / caret coloring per character.
-- 🎨  Customizable **color themes** (TOML) and **figlet ASCII banners** for the timer, WPM and results.
+- 🥷  **Stealth look**: plain top-left text that blends with your terminal (dim upcoming text, normal
+  typed text, red errors). The timer is **hidden by default** — press **Ctrl+T** to peek at it.
+- ⌨️  Live per-character feedback (correct / incorrect / caret) as you type.
 - ⏱️  **Test modes**: timed (30 / 60 / 120 s) and word-count (100 / 500) — all editable in config.
 - 📄  **Import challenges from PDF and Word (.docx)** — load a passage and type it.
-- 📊  Live WPM + accuracy; results screen with net/raw WPM, accuracy and consistency.
+- 📊  One-line results: `92 wpm · 98% acc · 95% con · 60.0s`. The timer starts on your first keystroke.
 
 ### Coming next
 - **Phase 2** — persistent records (SQLite), progress charts (WPM/accuracy over time), most-failed
@@ -30,13 +32,15 @@ Requires the [Rust toolchain](https://rustup.rs).
 git clone <repo> && cd type-cli
 cargo run -- --time 60                 # 60-second test
 cargo run -- --words 100               # 100-word test
-cargo run -- --theme dracula           # pick a theme
+cargo run -- --show-timer              # start with the timer visible
 cargo run -- import path/to/file.pdf   # type a document
 cargo run -- import path/to/file.docx
 ```
 
+In-game: type along · **Ctrl+T** show/hide the timer · **Tab** restart · **Esc** quit.
+
 Config and themes live in your XDG config dir (e.g. `~/.config/type-cli/`); the file is created on
-first run and is fully editable.
+first run and is fully editable. Prefer some color? `--theme serika_dark|dracula|classic16`.
 
 ## Development
 

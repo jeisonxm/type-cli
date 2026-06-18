@@ -1,5 +1,7 @@
-//! The typing screen: a figlet status banner, the per-character colored passage, and a live stats
-//! footer. Pure render — reads `&App`, writes the `Frame`.
+//! The typing screen, stealth style: plain text aligned top-left like a normal terminal, upcoming
+//! text dimmed (reads like a shell autosuggestion), with an optional discreet timer. Pure render.
+
+use std::time::Duration;
 
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -9,97 +11,83 @@ use ratatui::Frame;
 
 use crate::app::App;
 use crate::engine::{CharState, Mode};
-use crate::stats::Summary;
-use crate::ui::banner;
 use crate::ui::theme::Theme;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.config.theme;
-    let show_banner = app.config.settings.appearance.show_banner;
-    let banner_h = if show_banner { 7 } else { 1 };
 
-    let chunks = Layout::vertical([
-        Constraint::Length(banner_h),
-        Constraint::Min(1),
-        Constraint::Length(1),
-    ])
-    .margin(1)
-    .split(area);
-
-    let elapsed = app.elapsed();
-    let summary = Summary::compute(&app.session, elapsed);
-
-    // --- status banner (remaining seconds, or words completed) -------------
-    let status = status_text(app, elapsed);
-    if show_banner {
-        let art = banner::big_text(&status);
-        frame.render_widget(
-            Paragraph::new(art)
-                .alignment(Alignment::Center)
-                .style(Style::new().fg(theme.accent)),
-            chunks[0],
-        );
+    // Reserve a thin bottom row for the timer only when it is visible.
+    let (text_area, timer_area) = if app.show_timer {
+        let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)])
+            .margin(1)
+            .split(area);
+        (chunks[0], Some(chunks[1]))
     } else {
-        frame.render_widget(
-            Paragraph::new(status)
-                .alignment(Alignment::Center)
-                .style(Style::new().fg(theme.accent)),
-            chunks[0],
-        );
-    }
+        let chunks = Layout::vertical([Constraint::Min(1)]).margin(1).split(area);
+        (chunks[0], None)
+    };
 
-    // --- the passage -------------------------------------------------------
-    let text_area = chunks[1];
+    // The passage: a window that fits the area, rendered top-left.
     let (start, end) = visible_window(app, text_area.width, text_area.height);
     let spans: Vec<Span> = (start..end)
         .map(|i| styled_char(app.session.target()[i], app.session.char_state(i), theme))
         .collect();
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: false }),
+        Paragraph::new(Line::from(spans))
+            .wrap(Wrap { trim: false })
+            .alignment(Alignment::Left),
         text_area,
     );
 
-    // --- live stats + hints ------------------------------------------------
-    let footer = format!(
-        "wpm {:.0}   ·   acc {:.0}%   ·   esc quit   ·   tab restart",
-        summary.wpm, summary.accuracy
-    );
-    frame.render_widget(
-        Paragraph::new(footer)
-            .alignment(Alignment::Center)
-            .style(Style::new().fg(theme.sub)),
-        chunks[2],
-    );
+    // Discreet timer, bottom-right, dim.
+    if let Some(rect) = timer_area {
+        let typing_elapsed = app.session.elapsed(app.elapsed());
+        let label = timer_label(
+            app.mode,
+            typing_elapsed,
+            app.session.is_started(),
+            word_progress(app),
+        );
+        frame.render_widget(
+            Paragraph::new(label)
+                .alignment(Alignment::Right)
+                .style(Style::new().fg(theme.sub)),
+            rect,
+        );
+    }
 }
 
-fn status_text(app: &App, elapsed: std::time::Duration) -> String {
-    match app.mode {
+/// The timer/progress label. Pure and unit-testable. Time counts from the first keystroke: before
+/// the test starts it shows the full duration regardless of how long the screen has been open.
+fn timer_label(mode: Mode, typing_elapsed: Duration, started: bool, words_done: usize) -> String {
+    match mode {
         Mode::Time { secs } => {
-            let remaining = if app.session.is_started() {
-                secs.saturating_sub(elapsed.as_secs())
+            let left = if started {
+                secs.saturating_sub(typing_elapsed.as_secs())
             } else {
                 secs
             };
-            remaining.to_string()
+            format!("{left}s")
         }
-        Mode::Words { count } => {
-            let done = app.session.target()[..app.session.cursor()]
-                .iter()
-                .filter(|&&c| c == ' ')
-                .count();
-            format!("{done}/{count}")
-        }
+        Mode::Words { count } => format!("{words_done}/{count}"),
     }
+}
+
+fn word_progress(app: &App) -> usize {
+    app.session.target()[..app.session.cursor()]
+        .iter()
+        .filter(|&&c| c == ' ')
+        .count()
 }
 
 fn styled_char(ch: char, state: CharState, theme: &Theme) -> Span<'static> {
     let style = match state {
         CharState::Correct => Style::new().fg(theme.correct),
-        CharState::Incorrect if ch == ' ' => Style::new().bg(theme.error_bg),
         CharState::Incorrect => Style::new()
             .fg(theme.error)
             .add_modifier(Modifier::UNDERLINED),
-        CharState::Caret => Style::new().fg(theme.bg).bg(theme.caret),
+        // A reversed cell mimics the terminal's own block cursor.
+        CharState::Caret => Style::new().add_modifier(Modifier::REVERSED),
         CharState::Untyped => Style::new().fg(theme.untyped),
     };
     Span::styled(ch.to_string(), style)
@@ -142,5 +130,23 @@ mod tests {
         assert_eq!(align_to_word_start(&target, 8), 6);
         assert_eq!(align_to_word_start(&target, 0), 0);
         assert_eq!(align_to_word_start(&target, 3), 0); // inside first word
+    }
+
+    #[test]
+    fn timer_counts_from_first_keystroke_not_screen_open() {
+        // Before the test starts, it must show the full duration even if the screen has been open.
+        assert_eq!(
+            timer_label(Mode::Time { secs: 60 }, Duration::from_secs(30), false, 0),
+            "60s"
+        );
+        // Once started, it counts down from the typing-elapsed time.
+        assert_eq!(
+            timer_label(Mode::Time { secs: 60 }, Duration::from_secs(10), true, 0),
+            "50s"
+        );
+        assert_eq!(
+            timer_label(Mode::Words { count: 100 }, Duration::from_secs(5), true, 12),
+            "12/100"
+        );
     }
 }

@@ -19,7 +19,8 @@ The "why" behind type-cli. For the stack decision and rejected alternatives see
 main.rs        RAII teardown guard + panic hook; owns the event loop; wires everything.
 cli.rs         clap parsing → an AppCommand (type / import / config / theme).
 app.rs         App + AppState state machine (Menu → Typing → Results [→ Stats in P2]).
-input.rs       crossterm KeyEvent → engine Action. The ONLY input-side crossterm code.
+input.rs       crossterm KeyEvent → Command (Engine(Action) | ToggleTimer). The ONLY input-side
+               crossterm code; UI hotkeys (Ctrl+T) live here so the engine never sees them.
 config.rs      XDG resolution (directories), load/merge config.toml, env override, first-run scaffold.
 
 engine/        PURE. No ratatui/crossterm/I/O, no Instant::now().
@@ -37,11 +38,13 @@ sources/       Challenge providers → a normalized passage.
   pdf.rs       pdf-extract → text.
   docx.rs      zip + quick-xml → text.
 
-ui/            RENDER only. Pure function of &App → Frame; never mutates state.
-  typing_view.rs   per-character colored Paragraph.
-  results_view.rs  figlet WPM + stat cards (+ run chart in P2).
-  banner.rs        figlet timer/WPM/results banners.
-  theme.rs         Theme struct (bg/untyped/correct/error/caret/accent…) → ratatui Color.
+ui/            RENDER only. Pure function of &App → Frame; never mutates state. STEALTH: no
+               background fill, no figlet, no chrome (see ADR-0002).
+  typing_view.rs   plain top-left text; dim upcoming / reset correct / red errors / reversed caret;
+                   optional discreet timer (Ctrl+T). timer_label() is pure + tested.
+  results_view.rs  one discreet line: "92 wpm · 98% acc · 95% con · 60.0s".
+  theme.rs         Theme struct (bg/untyped/correct/error/caret/accent…) → ratatui Color; the default
+                   `terminal` theme maps to Color::Reset so it blends with the shell.
 
 storage/       SQLite (Phase 2+). Kept out of the engine.
 ghost.rs       Phase 3: replay a recorded timeline through the pure engine.

@@ -33,9 +33,13 @@ cargo run -- import file.pdf   # build a challenge from a document
 
 ## Locked decisions (do NOT change without an ADR)
 
-The stack (ratatui+crossterm, rusqlite bundled [P2], figlet-rs 0.1.x, pdf-extract + zip/quick-xml,
+The stack (ratatui+crossterm, rusqlite bundled [P2], pdf-extract + zip/quick-xml,
 directories+toml+serde, clap, anyhow/thiserror) is recorded in [`docs/adr/ADR-0001-tech-stack.md`](docs/adr/ADR-0001-tech-stack.md).
 Changing the stack or a core architectural boundary requires a new ADR.
+
+The UI is **stealth-only** (terminal-native camouflage; no figlet/background/chrome) — see
+[`docs/adr/ADR-0002-stealth-ui.md`](docs/adr/ADR-0002-stealth-ui.md). The mission: look like normal
+terminal work while practicing touch-typing.
 
 ## Non-negotiable invariants (these prevent the project's worst bugs)
 

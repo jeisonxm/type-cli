@@ -1,5 +1,5 @@
 //! Integration test: drive a full typing session through `App` and render every screen headlessly
-//! with ratatui's `TestBackend`. This exercises the engine → app → ui path end-to-end without a tty.
+//! with ratatui's `TestBackend`. Exercises the engine → app → ui path (stealth UI) without a tty.
 
 use std::path::PathBuf;
 
@@ -27,6 +27,10 @@ fn press(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
+fn ctrl(c: char) -> KeyEvent {
+    KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)
+}
+
 fn screen_text(terminal: &Terminal<TestBackend>) -> String {
     let buf = terminal.backend().buffer();
     let mut out = String::new();
@@ -39,15 +43,15 @@ fn screen_text(terminal: &Terminal<TestBackend>) -> String {
 }
 
 #[test]
-fn typing_a_words_test_reaches_results_and_renders() {
+fn typing_a_words_test_reaches_results_with_a_one_line_summary() {
     let mut app = App::new(
         test_config(),
         Mode::Words { count: 3 },
         SourceKind::Random("english".into()),
         None,
+        false,
     );
 
-    // Type the exact target text.
     let target: String = app.session.target().iter().collect();
     for c in target.chars() {
         app.on_key(press(c));
@@ -58,32 +62,61 @@ fn typing_a_words_test_reaches_results_and_renders() {
     assert!(summary.accuracy > 99.0, "typed everything correctly");
     assert_eq!(summary.incorrect_chars, 0);
 
-    // Render the results screen headlessly and check its labels show up.
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal.draw(|f| ui::render(f, &app)).unwrap();
     let text = screen_text(&terminal);
-    assert!(
-        text.contains("accuracy"),
-        "results screen shows stat labels"
-    );
-    assert!(
-        text.contains("restart"),
-        "results screen shows action hints"
-    );
+    assert!(text.contains("wpm"), "results shows the one-line summary");
+    assert!(text.contains("acc"), "results shows accuracy");
 }
 
 #[test]
-fn typing_view_renders_without_panic() {
+fn typing_screen_is_plain_text_with_no_chrome() {
     let app = App::new(
         test_config(),
         Mode::Time { secs: 30 },
         SourceKind::Random("english".into()),
         None,
+        false, // timer hidden
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal.draw(|f| ui::render(f, &app)).unwrap();
     let text = screen_text(&terminal);
-    assert!(text.contains("quit"), "typing screen shows the quit hint");
+
+    // The passage's first word is visible…
+    let target: String = app.session.target().iter().collect();
+    let first_word = target.split(' ').next().unwrap();
+    assert!(text.contains(first_word), "the passage is rendered");
+    // …and there is no game chrome: no stats, no hints, no timer.
+    assert!(!text.contains("wpm"), "no stats on the typing screen");
+    assert!(
+        !text.contains("quit"),
+        "no hint chrome on the typing screen"
+    );
+}
+
+#[test]
+fn ctrl_t_toggles_the_discreet_timer() {
+    let mut app = App::new(
+        test_config(),
+        Mode::Time { secs: 60 },
+        SourceKind::Random("english".into()),
+        None,
+        false,
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+
+    // Hidden: no timer.
+    terminal.draw(|f| ui::render(f, &app)).unwrap();
+    assert!(!screen_text(&terminal).contains("60s"));
+
+    // Toggle on with Ctrl+T → the timer shows the FULL duration (test hasn't started typing yet).
+    app.on_key(ctrl('t'));
+    assert!(app.show_timer);
+    terminal.draw(|f| ui::render(f, &app)).unwrap();
+    assert!(
+        screen_text(&terminal).contains("60s"),
+        "timer shows full duration before the first keystroke"
+    );
 }
 
 #[test]
@@ -93,8 +126,9 @@ fn restart_produces_a_fresh_session() {
         Mode::Words { count: 5 },
         SourceKind::Random("english".into()),
         None,
+        false,
     );
-    app.on_key(press('x')); // one wrong keystroke
+    app.on_key(press('x')); // one keystroke
     assert!(app.session.is_started());
     app.restart();
     assert_eq!(app.state, AppState::Typing);

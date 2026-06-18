@@ -59,7 +59,11 @@ impl Theme {
 }
 
 fn parse_color(s: &str) -> Result<Color> {
-    Color::from_str(s).map_err(|_| anyhow!("invalid color value: {s:?}"))
+    // "reset"/"default" → the terminal's own color (so themes can blend with the shell).
+    match s.trim().to_lowercase().as_str() {
+        "reset" | "default" | "terminal" => Ok(Color::Reset),
+        _ => Color::from_str(s).map_err(|_| anyhow!("invalid color value: {s:?}")),
+    }
 }
 
 fn opt_color(s: Option<&str>) -> Result<Option<Color>> {

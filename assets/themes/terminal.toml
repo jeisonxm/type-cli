@@ -1,0 +1,14 @@
+# Default "terminal" theme — blends with your shell so it looks like normal typing.
+# "reset" means "use the terminal's own default color" (no override).
+name = "Terminal"
+author = "type-cli"
+
+[colors]
+bg = "reset"          # don't paint a background — use the terminal's
+correct = "reset"     # typed-correct text looks like normal terminal text
+untyped = "darkgray"  # upcoming text, dim — reads like a shell autosuggestion
+error = "red"         # wrong characters
+error_bg = "reset"    # no background highlight on errors (stay subtle)
+caret = "reset"       # cursor cell uses a subtle reverse of the default colors
+accent = "reset"
+sub = "darkgray"      # the discreet timer / one-line results summary

@@ -31,6 +31,7 @@ fn main() -> Result<()> {
     if let Some(theme) = &cli.theme {
         config = config.with_theme(theme);
     }
+    let show_timer = cli.show_timer || config.settings.appearance.show_timer;
 
     match &cli.command {
         Some(Command::Config) => {
@@ -53,12 +54,18 @@ fn main() -> Result<()> {
                 Some("pdf") => SourceKind::Pdf(path.clone()),
                 _ => SourceKind::Docx(path.clone()),
             };
-            run_tui(App::new(config, mode, source, Some(text)))
+            run_tui(App::new(config, mode, source, Some(text), show_timer))
         }
         None => {
             let mode = resolve_mode(&cli, &config);
             let lang = config.settings.game.language.clone();
-            run_tui(App::new(config, mode, SourceKind::Random(lang), None))
+            run_tui(App::new(
+                config,
+                mode,
+                SourceKind::Random(lang),
+                None,
+                show_timer,
+            ))
         }
     }
 }
@@ -88,7 +95,7 @@ fn print_config(config: &AppConfig) {
 }
 
 fn print_themes(config: &AppConfig) {
-    println!("Built-in themes: serika_dark, dracula, classic16");
+    println!("Built-in themes: terminal, serika_dark, dracula, classic16");
     let dir = config.config_dir.join("themes");
     if let Ok(entries) = std::fs::read_dir(&dir) {
         println!("User themes in {}:", dir.display());

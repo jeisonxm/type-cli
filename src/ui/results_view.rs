@@ -1,14 +1,13 @@
-//! The results screen: a big figlet WPM, a row of stat cards, and action hints. Pure render.
+//! The results screen, stealth style: a single discreet line with the run summary, plus a tiny dim
+//! hint. No figlet, no splash — it stays unobtrusive. Pure render.
 
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::app::App;
 use crate::stats::Summary;
-use crate::ui::banner;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.config.theme;
@@ -16,59 +15,23 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         .summary
         .unwrap_or_else(|| Summary::compute(&app.session, app.elapsed()));
 
-    let chunks = Layout::vertical([
-        Constraint::Min(7),    // big WPM banner
-        Constraint::Length(3), // stat cards
-        Constraint::Length(2), // hints
-    ])
-    .margin(1)
-    .split(area);
+    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Length(1)])
+        .margin(1)
+        .split(area);
 
-    // --- big WPM -----------------------------------------------------------
-    let art = banner::big_text(&format!("{:.0}", s.wpm));
+    let summary = format!(
+        "{:.0} wpm · {:.0}% acc · {:.0}% con · {:.1}s",
+        s.wpm,
+        s.accuracy,
+        s.consistency,
+        s.elapsed.as_secs_f64()
+    );
     frame.render_widget(
-        Paragraph::new(art)
-            .alignment(Alignment::Center)
-            .style(Style::new().fg(theme.accent)),
+        Paragraph::new(summary).style(Style::new().fg(theme.sub)),
         chunks[0],
     );
-
-    // --- stat cards --------------------------------------------------------
-    let cards = Layout::horizontal([Constraint::Ratio(1, 4); 4]).split(chunks[1]);
-    let entries = [
-        ("accuracy", format!("{:.0}%", s.accuracy)),
-        ("consistency", format!("{:.0}%", s.consistency)),
-        ("raw wpm", format!("{:.0}", s.raw_wpm)),
-        ("time", format!("{:.1}s", s.elapsed.as_secs_f64())),
-    ];
-    for (rect, (label, value)) in cards.iter().zip(entries) {
-        frame.render_widget(stat_card(label, &value, theme.correct, theme.sub), *rect);
-    }
-
-    // --- hints -------------------------------------------------------------
     frame.render_widget(
-        Paragraph::new("tab / enter restart      ·      q / esc quit")
-            .alignment(Alignment::Center)
-            .style(Style::new().fg(theme.sub)),
-        chunks[2],
+        Paragraph::new("[tab] again · [esc] quit").style(Style::new().fg(theme.untyped)),
+        chunks[1],
     );
-}
-
-fn stat_card(
-    label: &str,
-    value: &str,
-    value_color: Color,
-    label_color: Color,
-) -> Paragraph<'static> {
-    Paragraph::new(vec![
-        Line::from(Span::styled(
-            value.to_string(),
-            Style::new().fg(value_color).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            label.to_string(),
-            Style::new().fg(label_color),
-        )),
-    ])
-    .alignment(Alignment::Center)
 }

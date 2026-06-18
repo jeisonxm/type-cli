@@ -3,23 +3,31 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-18 — Phase 1 (MVP) complete._
+_Last updated: 2026-06-18 — Phase 1 MVP + stealth UI redesign complete._
 
 ---
 
 ## Now (en lo que vamos)
 
-- **Phase:** 1 (MVP) ✅ complete and verified. Next up: Phase 2 (persistence + stats/charts).
-- **In flight:** nothing — P1 closed. Ready to start P2 (SQLite via `rusqlite` bundled + `rusqlite_migration`).
-- **Last decision:** lenient space-skip in the engine (space mid-word skips the rest of the word,
-  marked missed; not counted as a wrong keystroke). Revisit if we want strict monkeytype accuracy.
+- **Phase:** 1 (MVP) ✅ + **stealth UI** ✅. Next up: Phase 2 (persistence + stats/charts).
+- **In flight:** nothing. Ready to start P2 (SQLite via `rusqlite` bundled + `rusqlite_migration`).
+- **Last decision:** **stealth-only UI** (ADR-0002) — the mission is to look like normal terminal work
+  while practicing. No figlet/background/chrome; timer hidden + Ctrl+T toggle; one-line results.
 - **Blockers:** none.
-- **How to play:** `cargo run -- --time 60` · `--words 100` · `--theme dracula` · `import file.pdf`.
+- **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf`.
+  In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
 
 ---
 
 ## Done (lo que se crea)
 
+- **2026-06-18** — **Stealth UI redesign** (ADR-0002): removed figlet (`ui/banner.rs` + `figlet-rs`
+  dep) and the background fill; typing screen is plain top-left text (dim upcoming, reset correct, red
+  errors, reversed caret); `terminal` theme (`Color::Reset`) is the default; timer hidden by default
+  with `Ctrl+T` toggle (`input::Command` enum); one-line results; timer counts from the first
+  keystroke (display fix). 53 tests green; verified headless + real-tty pty.
+- **2026-06-18** — Cross-compiled a standalone Windows `.exe` (zigbuild → windows-gnu) and published
+  GitHub Release `v0.1.0`. Repo public at github.com/jeisonxm/type-cli.
 - **2026-06-18** — Repo scaffolding: `Cargo.toml`, `.gitignore`, `rust-toolchain.toml`, CI workflow,
   MIT license, `CLAUDE.md`, `README`, `CONTRIBUTING`, `CHANGELOG`, `docs/{ARCHITECTURE,ROADMAP,PROGRESS}`,
   `adr/ADR-0001`. Rust 1.96 installed.

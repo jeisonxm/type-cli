@@ -6,6 +6,20 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-18
+
+### Changed — Stealth UI (ADR-0002)
+- The UI is now **terminal-native camouflage**: no figlet banners, no background fill, no chrome.
+  The typing screen is plain top-left text (upcoming text dimmed like a shell autosuggestion).
+- New default theme `terminal` (uses the terminal's own colors via `reset`).
+- The timer is **hidden by default**; toggle it in-game with **Ctrl+T** (or start with `--show-timer`).
+- Results are a single discreet line (`92 wpm · 98% acc · 95% con · 60.0s`).
+- The timer now counts from the **first keystroke** (display fix).
+- Removed the `figlet-rs` dependency; removed the `appearance.show_banner`/`figlet_font` config keys
+  (config `schema_version` → 2; old keys are ignored on load).
+
+## [0.1.0] - 2026-06-18
+
 ### Added — Phase 1 (MVP)
 - Pure typing engine (`Action`/`Mode`/`TypingSession`) with grapheme/char-indexed state, space-skip,
   backspace and delete-word, and time injected as a parameter (deterministic, ghost-ready).

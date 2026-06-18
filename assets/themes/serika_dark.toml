@@ -1,0 +1,12 @@
+name = "Serika Dark"
+author = "type-cli"
+
+[colors]
+bg = "#323437"        # background
+untyped = "#646669"   # text not yet typed (dim)
+correct = "#d1d0c5"   # correctly typed characters
+error = "#ca4754"     # wrong characters
+error_bg = "#7e2a33"  # background highlight on an error / extra char
+caret = "#e2b714"     # cursor
+accent = "#e2b714"    # banners, WPM number, highlights
+sub = "#646669"       # secondary text (footer, hints)

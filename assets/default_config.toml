@@ -1,0 +1,45 @@
+# type-cli default configuration.
+# This file is written to your config dir on first run and is fully editable.
+# Delete it to regenerate defaults. Unknown keys are ignored; invalid values fall back safely.
+
+schema_version = 1
+
+[appearance]
+theme = "serika_dark"     # filename stem in themes/ (built-in or in <config_dir>/themes/)
+figlet_font = "standard"  # "standard" is built in; drop *.flf in <config_dir>/fonts/ to add more
+show_banner = true        # ASCII figlet banners for the timer / WPM / results
+
+[game]
+default_preset = "time_60"          # id referencing a [[presets]] entry below
+language = "english"                # wordlist stem in wordlists/ for random mode
+quick_restart = "tab"               # key to restart a test
+fold_smart_punctuation = true       # curly quotes/dashes/ellipsis → ASCII when importing PDF/DOCX
+
+# Editable test presets. kind = "time" (seconds) | "words" (count).
+[[presets]]
+id = "time_30"
+kind = "time"
+value = 30
+
+[[presets]]
+id = "time_60"
+kind = "time"
+value = 60
+
+[[presets]]
+id = "time_120"
+kind = "time"
+value = 120
+
+[[presets]]
+id = "words_100"
+kind = "words"
+value = 100
+
+[[presets]]
+id = "words_500"
+kind = "words"
+value = 500
+
+[paths]
+database = ""   # empty = <data_dir>/type-cli.db (used from Phase 2)

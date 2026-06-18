@@ -1,0 +1,12 @@
+name = "Dracula"
+author = "type-cli"
+
+[colors]
+bg = "#282a36"
+untyped = "#6272a4"
+correct = "#f8f8f2"
+error = "#ff5555"
+error_bg = "#44475a"
+caret = "#bd93f9"
+accent = "#50fa7b"
+sub = "#6272a4"

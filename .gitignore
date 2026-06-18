@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Local runtime data (the game writes to XDG dirs, not the repo, but just in case)
+/type-cli.db
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Scratch
+/tmp/
+/scratch/

@@ -1,0 +1,14 @@
+# 16-color fallback theme for terminals without truecolor support.
+# Uses named ANSI colors only (always renderable).
+name = "Classic 16"
+author = "type-cli"
+
+[colors]
+bg = "black"
+untyped = "darkgray"
+correct = "white"
+error = "red"
+error_bg = "darkgray"
+caret = "yellow"
+accent = "cyan"
+sub = "darkgray"

@@ -1,0 +1,47 @@
+[package]
+name = "type-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "A fast monkeytype-style touch-typing game for the terminal"
+license = "MIT"
+repository = "https://github.com/jeisonxm/type-cli"
+readme = "README.md"
+keywords = ["typing", "tui", "monkeytype", "terminal", "game"]
+categories = ["command-line-utilities", "games"]
+
+[[bin]]
+name = "type-cli"
+path = "src/main.rs"
+
+[dependencies]
+# TUI + terminal backend
+ratatui = "0.30"
+crossterm = "0.29"
+# ASCII banners (pinned to the 0.1.x API line; a divergent 1.x line has a different API — see ADR-0001)
+figlet-rs = "0.1"
+# Config + serialization
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+directories = "6"
+# Challenge sources: PDF + DOCX import
+pdf-extract = "0.10"
+zip = "2"
+quick-xml = "0.37"
+# Unicode-correct cursor / column math / normalization
+unicode-segmentation = "1"
+unicode-width = "0.2"
+unicode-normalization = "0.1"
+# CLI + errors + randomness
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+thiserror = "2"
+rand = "0.9"
+
+# NOTE: rusqlite + rusqlite_migration are introduced in Phase 2 (persistence/stats).
+# P1 (MVP) plays without a database.
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

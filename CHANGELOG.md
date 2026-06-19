@@ -6,6 +6,24 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-19
+
+### Changed — stats follow-up (practice by slowest letters)
+- **Practice now drills your slowest letters** instead of the words you mistyped. Per-letter typing
+  latency (clean letter-to-letter digraphs, word-initial/punctuation predecessors excluded) is
+  persisted (additive migration 2 on `char_stat`) and aggregated across your whole history; pressing
+  `r` in `type-cli stats` builds a drill from words rich in those letters (Unicode-aware accent
+  folding for non-English). Replaces the old "retry worst words" drill.
+- **Practice runs no longer pollute your stats.** Drill runs stay tagged `source='retry'` but are
+  excluded from every analytics query (run count, history graph, key heatmap, slowest-letters), so
+  practicing never skews your real numbers — this also retroactively cleans already-saved drills.
+
+### Added — graph navigation
+- The WPM history graph gained keys in `type-cli stats`: **`o`** cycles the aggregation period
+  (session / day / week / month / year — averaged per bucket), **`O`** cycles a test-type filter
+  (all / time / words), and **←/→** scroll through history when there are many attempts. Date
+  bucketing uses SQLite (no new dependency); week grouping is calendar-based (`%W`).
+
 ## [0.2.0] - 2026-06-19
 
 ### Added — Phase 2 (persistence + stats/charts)

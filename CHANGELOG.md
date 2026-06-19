@@ -6,6 +6,29 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-19
+
+### Added — Phase 2 (persistence + stats/charts)
+- **SQLite persistence** via `rusqlite` (bundled) + `rusqlite_migration`. New impure `storage/`
+  module (kept out of the pure engine/stats core): WAL/NORMAL/foreign-keys pragmas, an idempotent
+  migration with the full schema, and a seeded `local` user. Every finished run is saved with its
+  per-character tallies and worst words, in one transaction. Persistence is best-effort — a
+  missing/locked DB disables saving but never crashes the game.
+- **`type-cli stats`** — an opt-in analytics TUI: a WPM-over-time `Chart`, a `BarChart` of the
+  most-missed keys, and a colour-coded QWERTY heatmap (min-sample gated). Empty-state when there's
+  no history yet.
+- **Retry worst words** — press `r` in the stats screen to start a drill seeded from the latest
+  run's worst words (`SourceKind::Retry`, persisted as `source='retry'`).
+- **WPM/sec sparkline** on the results screen, gated behind the timer toggle (Ctrl+T) so results
+  stay stealth by default.
+- Pure stats extended: `Summary` gains `missed_chars`/`extra_chars`; `stats::keystats::worst_words`
+  ranks mistyped words with per-word WPM.
+
+### Notes
+- **ADR-0003** records that the stats visualization is a bounded, opt-in exception to the stealth UI
+  (ADR-0002): the typing screen and default results stay stealth; rich visuals appear only on
+  explicit `type-cli stats` (or with the timer toggled on).
+
 ## [0.1.3] - 2026-06-19
 
 ### Changed

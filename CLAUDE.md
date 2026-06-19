@@ -27,9 +27,12 @@ cargo build
 cargo test                     # unit + integration; pure modules are the bulk
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
-cargo run -- --time 60         # play a 60s test
+cargo run -- --time 60         # play a 60s test (stealth; Ctrl+T toggles the timer)
 cargo run -- import file.pdf   # build a challenge from a document
 ```
+
+Building the standalone Windows `.exe`, cutting a release, the CI/`workflow`-scope status, and the
+corporate-Windows `cargo` workarounds all live in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Locked decisions (do NOT change without an ADR)
 

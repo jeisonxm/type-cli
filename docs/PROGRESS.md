@@ -3,7 +3,7 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-18 — Phase 1 MVP + stealth UI redesign complete._
+_Last updated: 2026-06-19 — Phase 1 MVP + stealth UI shipped as v0.1.1._
 
 ---
 
@@ -16,6 +16,10 @@ _Last updated: 2026-06-18 — Phase 1 MVP + stealth UI redesign complete._
 - **Blockers:** none.
 - **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf`.
   In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
+- **Build/release/ops:** see [`DEVELOPMENT.md`](DEVELOPMENT.md). Public repo:
+  github.com/jeisonxm/type-cli · latest release **v0.1.1** (standalone Windows `.exe`).
+  NOTE: `.github/workflows/ci.yml` exists on disk but is **not pushed** — the `gh` token lacks the
+  `workflow` scope. To enable CI: `gh auth refresh -s workflow -h github.com`, then track & push it.
 
 ---
 
@@ -25,7 +29,8 @@ _Last updated: 2026-06-18 — Phase 1 MVP + stealth UI redesign complete._
   dep) and the background fill; typing screen is plain top-left text (dim upcoming, reset correct, red
   errors, reversed caret); `terminal` theme (`Color::Reset`) is the default; timer hidden by default
   with `Ctrl+T` toggle (`input::Command` enum); one-line results; timer counts from the first
-  keystroke (display fix). 53 tests green; verified headless + real-tty pty.
+  keystroke (display fix). 53 tests green; verified headless + real-tty pty. **Shipped as Release
+  v0.1.1** (standalone stealth Windows `.exe`, cross-compiled with zigbuild).
 - **2026-06-18** — Cross-compiled a standalone Windows `.exe` (zigbuild → windows-gnu) and published
   GitHub Release `v0.1.0`. Repo public at github.com/jeisonxm/type-cli.
 - **2026-06-18** — Repo scaffolding: `Cargo.toml`, `.gitignore`, `rust-toolchain.toml`, CI workflow,
@@ -67,6 +72,7 @@ _Last updated: 2026-06-18 — Phase 1 MVP + stealth UI redesign complete._
 ### Polish / known gaps (any time)
 - Long-passage rendering uses a fitted window instead of a true scroll widget (good enough; revisit if needed).
 - Strict vs lenient accuracy for skipped letters (see "Last decision").
-- Bundle extra `.flf` figlet fonts + honor `figlet_font` beyond "standard".
+- Stronger camouflage: optional prose/realistic text source (random function-words read like a list).
+- Enable CI on GitHub once the `workflow` scope is granted (see Now → Build/release/ops).
 
 (Full acceptance criteria per phase: `docs/ROADMAP.md`.)

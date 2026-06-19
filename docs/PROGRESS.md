@@ -3,7 +3,7 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-19 — Phase 1 MVP + stealth UI shipped as v0.1.1._
+_Last updated: 2026-06-19 — v0.1.2 bugfix: terminal cursor restored on exit (was left hidden)._
 
 ---
 
@@ -17,7 +17,7 @@ _Last updated: 2026-06-19 — Phase 1 MVP + stealth UI shipped as v0.1.1._
 - **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf`.
   In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
 - **Build/release/ops:** see [`DEVELOPMENT.md`](DEVELOPMENT.md). Public repo:
-  github.com/jeisonxm/type-cli · latest release **v0.1.1** (standalone Windows `.exe`).
+  github.com/jeisonxm/type-cli · latest release **v0.1.2** (standalone Windows `.exe`).
   NOTE: `.github/workflows/ci.yml` exists on disk but is **not pushed** — the `gh` token lacks the
   `workflow` scope. To enable CI: `gh auth refresh -s workflow -h github.com`, then track & push it.
 
@@ -25,6 +25,11 @@ _Last updated: 2026-06-19 — Phase 1 MVP + stealth UI shipped as v0.1.1._
 
 ## Done (lo que se crea)
 
+- **2026-06-19** — **Bugfix v0.1.2: terminal cursor left hidden on exit.** ratatui hides the cursor
+  every frame and the teardown never re-showed it, so after a mistype the terminal looked "frozen"
+  (the leak ended in `␛[?25l`). Teardown now restores the cursor (`Show`) on both the RAII-drop and
+  panic-hook paths, factored into a unit-tested `restore_terminal(out, kitty)` helper (`src/main.rs`).
+  54 tests green (added a teardown regression test — the contract no headless test had covered).
 - **2026-06-18** — **Stealth UI redesign** (ADR-0002): removed figlet (`ui/banner.rs` + `figlet-rs`
   dep) and the background fill; typing screen is plain top-left text (dim upcoming, reset correct, red
   errors, reversed caret); `terminal` theme (`Color::Reset`) is the default; timer hidden by default

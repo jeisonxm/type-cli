@@ -6,6 +6,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-19
+
+### Fixed
+- **Terminal cursor was left hidden after exit**, which looked like a frozen terminal (e.g. after a
+  mistype). ratatui hides the cursor on every frame and the teardown never re-showed it; it now
+  restores the cursor (`Show`) on both the RAII-drop and panic-hook paths. The teardown is factored
+  into a unit-tested `restore_terminal` helper so the cursor-restore contract can't silently regress.
+
 ## [0.1.1] - 2026-06-18
 
 ### Changed — Stealth UI (ADR-0002)

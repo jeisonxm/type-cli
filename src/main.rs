@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
+use crossterm::cursor::Show;
 use crossterm::event::{
     self, Event, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags,
@@ -139,13 +140,21 @@ impl Tui {
 
 impl Drop for Tui {
     fn drop(&mut self) {
-        let mut out = io::stdout();
-        if self.kitty {
-            let _ = execute!(out, PopKeyboardEnhancementFlags);
-        }
-        let _ = execute!(out, LeaveAlternateScreen);
-        let _ = disable_raw_mode();
+        restore_terminal(&mut io::stdout(), self.kitty);
     }
+}
+
+/// Undo everything `Tui::enter` set up, in reverse: pop kitty flags, leave the alternate screen,
+/// **re-show the cursor** (ratatui hides it on every frame and never restores it — a teardown that
+/// forgets this leaves the user's terminal with an invisible cursor, which reads as "frozen"), then
+/// drop raw mode last. Best-effort: each step ignores errors so one failure can't strand the rest.
+/// Takes a `Write` so it is unit-testable without a real terminal.
+fn restore_terminal(out: &mut impl io::Write, kitty: bool) {
+    if kitty {
+        let _ = execute!(out, PopKeyboardEnhancementFlags);
+    }
+    let _ = execute!(out, LeaveAlternateScreen, Show);
+    let _ = disable_raw_mode();
 }
 
 /// Install a panic hook that restores the terminal before the default panic message prints, so a
@@ -153,10 +162,8 @@ impl Drop for Tui {
 fn install_panic_hook() {
     let original = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let mut out = io::stdout();
-        let _ = execute!(out, PopKeyboardEnhancementFlags);
-        let _ = execute!(out, LeaveAlternateScreen);
-        let _ = disable_raw_mode();
+        // The hook can't see `Tui::kitty`; popping flags is idempotent and harmless if unset.
+        restore_terminal(&mut io::stdout(), true);
         original(info);
     }));
 }
@@ -185,4 +192,27 @@ fn run_loop(app: &mut App, terminal: &mut Terminal<CrosstermBackend<Stdout>>) ->
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ratatui hides the cursor every frame; teardown MUST re-show it or the terminal looks frozen
+    // after exit. This is the bug v0.1.2 fixed — guard it so it can't silently regress.
+    #[test]
+    fn restore_terminal_reshows_the_cursor_and_leaves_alt_screen() {
+        let mut buf: Vec<u8> = Vec::new();
+        restore_terminal(&mut buf, true);
+        // Show cursor (DECTCEM set): ESC [ ? 2 5 h
+        assert!(
+            buf.windows(6).any(|w| w == b"\x1b[?25h"),
+            "teardown must emit the show-cursor sequence, got: {buf:?}"
+        );
+        // Leave alternate screen: ESC [ ? 1 0 4 9 l
+        assert!(
+            buf.windows(8).any(|w| w == b"\x1b[?1049l"),
+            "teardown must leave the alternate screen, got: {buf:?}"
+        );
+    }
 }

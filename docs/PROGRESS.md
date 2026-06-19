@@ -3,17 +3,16 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-19 — Phase 2 complete: PR1 (persistence) + PR2 (stats TUI, retry, sparkline).
-`type-cli stats` renders history + most-missed keys + QWERTY heatmap; "retry worst words" works._
+_Last updated: 2026-06-19 — Phase 2 shipped as **v0.2.0** (merged to `main`, pushed, GitHub release
+with a standalone Windows `.exe`). Persistence + `type-cli stats` (history/heatmap) + retry worst words._
 
 ---
 
 ## Now (en lo que vamos)
 
-- **Phase:** 2 (persistence + stats/charts) — **PR1 ✅ + PR2 ✅ done.** Phase 2 feature-complete.
-  Next: Phase 3 (ghost/shadow replay).
-- **In flight:** nothing. PR1 is committed on `feat/phase2-persistence`; PR2 is committed on
-  `feat/phase2-stats` (stacked on PR1). Neither branch is pushed / PR-opened yet.
+- **Phase:** 2 (persistence + stats/charts) — **shipped as v0.2.0.** Next: Phase 3 (ghost/shadow replay).
+- **In flight:** nothing. Both PRs merged to `main` (fast-forward) and pushed to `origin/main`;
+  feature branches deleted. GitHub **release v0.2.0** published with the Windows `.exe`.
 - **Decision (P2, ADR-0003):** stats is a **full TUI** (Chart + BarChart + QWERTY heatmap), an
   *opt-in* exception to stealth (only on `type-cli stats`); results screen gained a discreet WPM/sec
   **sparkline** gated behind the timer toggle. Typing screen unchanged (still stealth).
@@ -24,7 +23,7 @@ _Last updated: 2026-06-19 — Phase 2 complete: PR1 (persistence) + PR2 (stats T
   `stats`. In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
   In stats: `r` retry worst words · `q`/`Esc` quit.
 - **Build/release/ops:** see [`DEVELOPMENT.md`](DEVELOPMENT.md). Public repo:
-  github.com/jeisonxm/type-cli · latest release **v0.1.3** (standalone Windows `.exe`).
+  github.com/jeisonxm/type-cli · latest release **v0.2.0** (standalone Windows `.exe`, bundled SQLite).
   NOTE: `.github/workflows/ci.yml` exists on disk but is **not pushed** — the `gh` token lacks the
   `workflow` scope. To enable CI: `gh auth refresh -s workflow -h github.com`, then track & push it.
 

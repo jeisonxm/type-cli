@@ -57,10 +57,10 @@ pub fn render(frame: &mut Frame, app: &StatsApp, area: Rect) {
     render_missed_keys(frame, app, chunks[2]);
     render_heatmap(frame, app, chunks[3]);
 
-    let hint = if app.can_retry() {
-        "[r] retry worst words · [q] quit"
+    let hint = if app.can_practice() {
+        "[r] practice slow letters · [o] period · [O] type · ←/→ scroll · [q] quit"
     } else {
-        "[q] quit"
+        "[o] period · [O] type · ←/→ scroll · [q] quit"
     };
     frame.render_widget(
         Paragraph::new(hint).style(Style::new().fg(theme.untyped)),
@@ -70,18 +70,21 @@ pub fn render(frame: &mut Frame, app: &StatsApp, area: Rect) {
 
 fn render_wpm_chart(frame: &mut Frame, app: &StatsApp, area: Rect) {
     let theme = &app.theme;
-    let max_wpm = app.points.iter().map(|p| p.wpm).fold(1.0_f64, f64::max);
-    let last_x = (app.wpm_series.len().saturating_sub(1)).max(1) as f64;
+    // The visible window of the currently-selected (period, filter) series.
+    let series = app.visible_series();
+    let max_wpm = series.iter().map(|(_, y)| *y).fold(1.0_f64, f64::max);
+    let last_x = (series.len().saturating_sub(1)).max(1) as f64;
 
     let dataset = Dataset::default()
-        .name("wpm")
+        .name(app.graph_filter.label())
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(Style::new().fg(theme.accent))
-        .data(&app.wpm_series);
+        .data(&series);
 
+    let title = format!("wpm · {}", app.graph_title());
     let chart = Chart::new(vec![dataset])
-        .block(Block::default().title(Span::styled("wpm over time", Style::new().fg(theme.sub))))
+        .block(Block::default().title(Span::styled(title, Style::new().fg(theme.sub))))
         .x_axis(Axis::default().bounds([0.0, last_x]))
         .y_axis(
             Axis::default()

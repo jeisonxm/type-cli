@@ -31,6 +31,8 @@ fn run(started_at: i64, wpm: f64) -> RunRecord {
             expected_char: "e".into(),
             typed_total: 40,
             error_count: 9,
+            total_latency_ms: 7500, // avg 300ms over...
+            latency_samples: 25,    // ...25 samples → above the slow-letter min-sample gate
         }],
         worst_words: vec![WorstWordRow {
             word: "their".into(),
@@ -59,7 +61,10 @@ fn stats_screen_renders_history_keys_and_heatmap() {
     insert_run(&mut store, &run(200, 85.0)).unwrap();
 
     let app = StatsApp::load(&store, &Theme::fallback()).unwrap();
-    assert!(app.can_retry(), "the latest run had a worst word");
+    assert!(
+        app.can_practice(),
+        "runs carry enough latency samples to drill a slow letter"
+    );
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -72,12 +77,13 @@ fn stats_screen_renders_history_keys_and_heatmap() {
 
     assert!(text.contains("type-cli stats"), "title with run count");
     assert!(text.contains("2 runs"));
-    assert!(text.contains("wpm over time"), "history chart present");
+    assert!(text.contains("wpm"), "history chart present");
+    assert!(text.contains("session"), "chart shows the current period");
     assert!(text.contains("most-missed keys"), "bar chart present");
     assert!(text.contains("heatmap"), "qwerty heatmap present");
     assert!(
-        text.contains("retry worst words"),
-        "retry hint shown when a worst word exists"
+        text.contains("practice slow letters"),
+        "practice hint shown when slow letters exist"
     );
 }
 
@@ -85,7 +91,7 @@ fn stats_screen_renders_history_keys_and_heatmap() {
 fn stats_screen_shows_empty_state_with_no_runs() {
     let store = Store::open_in_memory().unwrap();
     let app = StatsApp::load(&store, &Theme::fallback()).unwrap();
-    assert!(!app.can_retry());
+    assert!(!app.can_practice());
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -96,5 +102,5 @@ fn stats_screen_shows_empty_state_with_no_runs() {
         .unwrap();
     let text = screen_text(&terminal);
     assert!(text.contains("No runs yet"), "empty-state message");
-    assert!(!text.contains("retry"), "no retry hint with no data");
+    assert!(!text.contains("practice"), "no practice hint with no data");
 }

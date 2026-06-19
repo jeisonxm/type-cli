@@ -2,6 +2,7 @@
 //! transitions between typing and results. The clock lives here (the impure shell), not in the
 //! engine — `App` reads `Instant::now()` and passes a plain `Duration` down to the pure engine.
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::KeyEvent;
@@ -10,7 +11,7 @@ use crate::config::AppConfig;
 use crate::engine::{Action, Mode, TypingSession};
 use crate::input;
 use crate::sources::{self, wordlist, SourceKind};
-use crate::stats::keystats::{char_tallies, worst_words};
+use crate::stats::keystats::{char_latencies, char_tallies, worst_words};
 use crate::stats::Summary;
 use crate::storage::{insert_run, CharStatRow, RunRecord, Store, WorstWordRow};
 
@@ -84,8 +85,12 @@ impl App {
             SourceKind::Pdf(_) | SourceKind::Docx(_) => {
                 sources::build_target(doc_text.unwrap_or_default(), mode, true, &mut rng)
             }
-            // A retry drill types exactly the captured worst words, in order.
-            SourceKind::Retry(words) => words.join(" ").chars().collect(),
+            // A practice drill is words rich in the player's slowest letters.
+            SourceKind::SlowLetters { letters, language } => {
+                wordlist::practice_passage(language, letters, need, &mut rng)
+                    .chars()
+                    .collect()
+            }
         };
         TypingSession::new(target, mode)
     }
@@ -164,15 +169,28 @@ impl App {
             SourceKind::Random(lang) => ("random", None, Some(lang.clone())),
             SourceKind::Pdf(p) => ("pdf", Some(p.display().to_string()), None),
             SourceKind::Docx(p) => ("docx", Some(p.display().to_string()), None),
-            SourceKind::Retry(_) => ("retry", None, None),
+            // Practice drills are tagged `retry` (a non-analytics source) so they never pollute
+            // stats/graphs; the slowest-letter aggregation also excludes them.
+            SourceKind::SlowLetters { language, .. } => ("retry", None, Some(language.clone())),
         };
 
+        // Per-letter latency, keyed by expected char, to enrich the tally rows below.
+        let latencies: HashMap<char, (i64, i64)> = char_latencies(self.session.history())
+            .into_iter()
+            .map(|l| (l.expected, (l.total_ms as i64, l.samples as i64)))
+            .collect();
         let char_stats = char_tallies(self.session.history())
             .into_iter()
-            .map(|t| CharStatRow {
-                expected_char: t.expected.to_string(),
-                typed_total: t.typed_total as i64,
-                error_count: t.error_count as i64,
+            .map(|t| {
+                let (total_latency_ms, latency_samples) =
+                    latencies.get(&t.expected).copied().unwrap_or((0, 0));
+                CharStatRow {
+                    expected_char: t.expected.to_string(),
+                    typed_total: t.typed_total as i64,
+                    error_count: t.error_count as i64,
+                    total_latency_ms,
+                    latency_samples,
+                }
             })
             .collect();
         let worst = worst_words(&self.session)

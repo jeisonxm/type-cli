@@ -204,28 +204,34 @@ fn results_screen_renders_with_timer_visible() {
 }
 
 #[test]
-fn retry_source_types_the_given_words_and_persists_as_retry() {
+fn slow_letter_practice_types_letter_rich_words_and_persists_as_retry() {
     let config = test_config();
     let db_path = config.database_path();
-    let words = vec!["their".to_string(), "because".to_string()];
 
     let mut app = App::new(
         config,
-        Mode::Words { count: words.len() },
-        SourceKind::Retry(words),
+        Mode::Words { count: 5 },
+        SourceKind::SlowLetters {
+            letters: vec!['k'],
+            language: "english".to_string(),
+        },
         None,
         false,
     );
-    // The retry drill's target is exactly the worst words, in order.
+    // The drill target is words rich in the slow letter.
     let target: String = app.session.target().iter().collect();
-    assert_eq!(target, "their because");
+    assert_eq!(target.split(' ').count(), 5);
+    assert!(
+        target.contains('k'),
+        "drill words feature the slow letter, got: {target}"
+    );
 
     for c in target.chars() {
         app.on_key(press(c));
     }
     assert_eq!(app.state, AppState::Results);
 
-    // It was saved with the 'retry' source tag.
+    // It was saved with the non-analytics 'retry' source tag (so it never pollutes stats).
     let store = Store::open(&db_path).unwrap();
     let src: String = store
         .conn()

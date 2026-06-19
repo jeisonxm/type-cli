@@ -73,7 +73,7 @@ mod tests {
             .conn()
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 1);
+        assert_eq!(v, 2);
         // The seeded local user exists.
         let n: i64 = store
             .conn()
@@ -99,5 +99,52 @@ mod tests {
         assert_eq!(users, 1, "the local user is seeded exactly once");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn upgrades_v1_database_to_v2_preserving_runs() {
+        // Build a v1 database by hand (the pre-latency `char_stat`, marked user_version = 1).
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE user (id INTEGER PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL);
+             CREATE TABLE test_run (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, mode TEXT NOT NULL,
+                 target INTEGER NOT NULL, source TEXT NOT NULL, source_ref TEXT, language TEXT,
+                 wpm REAL NOT NULL, raw_wpm REAL NOT NULL, accuracy REAL NOT NULL, consistency REAL,
+                 chars_correct INTEGER NOT NULL DEFAULT 0, chars_incorrect INTEGER NOT NULL DEFAULT 0,
+                 chars_extra INTEGER NOT NULL DEFAULT 0, chars_missed INTEGER NOT NULL DEFAULT 0,
+                 elapsed_ms INTEGER NOT NULL, started_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
+             CREATE TABLE char_stat (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL,
+                 expected_char TEXT NOT NULL, typed_total INTEGER NOT NULL DEFAULT 0,
+                 error_count INTEGER NOT NULL DEFAULT 0);
+             INSERT INTO user (id, username, created_at) VALUES (1,'local',0);
+             INSERT INTO test_run (user_id, mode, target, source, wpm, raw_wpm, accuracy,
+                 elapsed_ms, started_at, created_at)
+                 VALUES (1,'time',60,'random',80,83,97,60000,1000,61000);
+             INSERT INTO char_stat (run_id, expected_char, typed_total, error_count) VALUES (1,'e',30,5);
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+
+        // Opening through the Store runs migration 2 (the additive latency columns).
+        let store = Store::from_conn(conn).expect("upgrade v1 → v2");
+        let v: i64 = store
+            .conn()
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 2);
+        let runs: i64 = store
+            .conn()
+            .query_row("SELECT COUNT(*) FROM test_run", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(runs, 1, "existing runs survive the upgrade");
+        let (tot, n): (i64, i64) = store
+            .conn()
+            .query_row(
+                "SELECT total_latency_ms, latency_samples FROM char_stat WHERE run_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((tot, n), (0, 0), "legacy rows default to zero latency");
     }
 }

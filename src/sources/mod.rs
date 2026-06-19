@@ -24,8 +24,11 @@ pub enum SourceKind {
     Pdf(PathBuf),
     /// A passage extracted from a Word .docx.
     Docx(PathBuf),
-    /// A drill built from a previous run's worst words ("retry worst words").
-    Retry(Vec<String>),
+    /// A practice drill of words rich in the player's slowest letters (slowest first).
+    SlowLetters {
+        letters: Vec<char>,
+        language: String,
+    },
 }
 
 /// Zero-width / invisible characters to drop during normalization.

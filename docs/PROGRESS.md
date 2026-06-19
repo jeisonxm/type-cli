@@ -3,16 +3,27 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-19 — Phase 2 shipped as **v0.2.0** (merged to `main`, pushed, GitHub release
-with a standalone Windows `.exe`). Persistence + `type-cli stats` (history/heatmap) + retry worst words._
+_Last updated: 2026-06-19 — Phase 2 shipped as **v0.2.0**. Follow-up (uncommitted): stats reworked —
+practice now drills your **slowest letters** (was retry-worst-words), practice runs are **excluded
+from analytics**, and the WPM graph gained **period aggregation (`o`), a time/words filter (`O`), and
+←/→ scroll**. Per-letter latency persisted via additive migration 2._
 
 ---
 
 ## Now (en lo que vamos)
 
-- **Phase:** 2 (persistence + stats/charts) — **shipped as v0.2.0.** Next: Phase 3 (ghost/shadow replay).
-- **In flight:** nothing. Both PRs merged to `main` (fast-forward) and pushed to `origin/main`;
-  feature branches deleted. GitHub **release v0.2.0** published with the Windows `.exe`.
+- **Phase:** 2 (persistence + stats/charts) — **shipped as v0.2.0**; a stats follow-up is now
+  implemented locally (see below). Next: Phase 3 (ghost/shadow replay).
+- **In flight:** stats follow-up **implemented + self-reviewed (multi-agent), 96 tests green,
+  clippy/fmt clean.** Slow-letter practice + analytics-exclusion + graph aggregation/filter/scroll.
+- **Decision (stats follow-up):** (1) practice = **slowest letters** (per-letter latency aggregated
+  across history), drilled with words rich in those letters — *replaces* retry-worst-words. (2)
+  Practice runs stay tagged `source='retry'` (a non-analytics tag) so they never pollute
+  stats/graphs; all analytics queries filter `source != 'retry'`. (3) Per-letter latency persisted by
+  **additive migration 2** on `char_stat` (`total_latency_ms`,`latency_samples`); old rows default 0
+  and are sample-gated out. (4) Graph period buckets use **SQLite `strftime`+`localtime`** (`%W` week
+  is non-ISO) — chosen to avoid adding a date crate (no stack change). Series precomputed at load so
+  the interactive loop stays DB-free.
 - **Decision (P2, ADR-0003):** stats is a **full TUI** (Chart + BarChart + QWERTY heatmap), an
   *opt-in* exception to stealth (only on `type-cli stats`); results screen gained a discreet WPM/sec
   **sparkline** gated behind the timer toggle. Typing screen unchanged (still stealth).
@@ -21,7 +32,8 @@ with a standalone Windows `.exe`). Persistence + `type-cli stats` (history/heatm
 - **Blockers:** none.
 - **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf` ·
   `stats`. In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
-  In stats: `r` retry worst words · `q`/`Esc` quit.
+  In stats: `r` practice slowest letters · `o` cycle period (session/day/week/month/year) · `O`
+  cycle filter (all/time/words) · `←/→` scroll the graph · `q`/`Esc` quit.
 - **Build/release/ops:** see [`DEVELOPMENT.md`](DEVELOPMENT.md). Public repo:
   github.com/jeisonxm/type-cli · latest release **v0.2.0** (standalone Windows `.exe`, bundled SQLite).
   NOTE: `.github/workflows/ci.yml` exists on disk but is **not pushed** — the `gh` token lacks the
@@ -31,6 +43,26 @@ with a standalone Windows `.exe`). Persistence + `type-cli stats` (history/heatm
 
 ## Done (lo que se crea)
 
+- **2026-06-19** — **Stats follow-up: slow-letter practice + analytics exclusion + graph nav** (local,
+  uncommitted). `stats::keystats::char_latencies` (pure): clean-digraph per-letter latency (both
+  keystrokes correct/non-backspace, current alphabetic, previous a non-space letter so word-initial
+  keys are excluded; >2 s pauses dropped). Migration 2 adds `total_latency_ms`/`latency_samples` to
+  `char_stat` (additive; v1→v2 upgrade test preserves old runs). `queries`: `run_count`/
+  `key_aggregates` now exclude `source='retry'`; **removed** `recent_runs`/`RunPoint`/
+  `most_recent_worst_words`; **added** `slowest_letters` (avg-latency, min-sample gated) and
+  `period_buckets` (per-`(bucket,mode)` via `strftime`/`localtime`, or per-run for "session").
+  `SourceKind::Retry` → `SlowLetters { letters, language }`; `wordlist::practice_passage` builds a
+  drill from words richest in the slow letters (weighted, falls back to random). `StatsApp`: precomputes
+  all `(period,filter)` series, `o`/`O`/`←`/`→` navigation (robust `'O'` match across plain/kitty
+  terminals; Ctrl-guarded), `visible_series` window, `Practice(Vec<char>)` outcome. `ui/stats_view`
+  charts the visible window with a period/filter/scroll title. **96 tests green** (incl. all-runs
+  averaging ≠ avg-of-mode-averages, scroll clamping, v1→v2 migration, practice tagged `retry` &
+  excluded), clippy/fmt clean. Multi-agent self-review fixed 3 confirmed issues: deterministic
+  `fold_buckets` order on `started_at` ties (id tiebreak), `char_latencies` predecessor must be a
+  *letter* (not just non-space — excludes punctuation/digits in imported docs), and `practice_passage`
+  case-folds accents (Unicode, not ASCII) so an uppercase `É` slow letter matches `é` words. Accepted
+  tradeoffs: `%W` week splits at New Year (no ISO week without a date crate); session series loads all
+  runs (one-shot at load). `worst_word` rows still persisted as diagnostics (no live reader).
 - **2026-06-19** — **Phase 2 · PR2: stats TUI + retry + sparkline (branch `feat/phase2-stats`).**
   `storage/queries.rs`: `recent_runs`, `run_count`, `key_aggregates` (min-sample `HAVING` gate),
   `most_recent_worst_words`. New `stats_app::StatsApp` (loads the queries; `q`/`Esc` quit, `r` →
@@ -94,12 +126,13 @@ with a standalone Windows `.exe`). Persistence + `type-cli stats` (history/heatm
    `docs/ARCHITECTURE.md` (migration 1 seeds a `local` user). Migrations idempotent from empty DB.
 2. ✅ **Done (PR1).** Each finished run + `char_stat` + `worst_word` is persisted; runs survive
    across launches (e2e test).
-3. ✅ **Done (PR2).** `type-cli stats` — WPM-over-time `Chart`, `BarChart` of most-missed keys,
-   QWERTY heatmap (min-sample gated), plus a timer-gated WPM/sec sparkline on the results screen.
-   Recorded in **ADR-0003**. _(Daily-bucket view not built — the per-run timeline covers the need;
-   revisit if wanted.)_
-4. ✅ **Done (PR2).** "Retry worst words" → `SourceKind::Retry` seeds a session from the latest
-   run's worst words (launched with `r` from the stats screen).
+3. ✅ **Done (PR2 + follow-up).** `type-cli stats` — WPM `Chart`, `BarChart` of most-missed keys,
+   QWERTY heatmap (min-sample gated), timer-gated WPM/sec sparkline on results. Recorded in
+   **ADR-0003**. Follow-up added period aggregation (`o`: session/day/week/month/year), a time/words
+   filter (`O`), and `←/→` scroll.
+4. ✅ **Done (PR2), reworked in follow-up.** Practice now drills the player's **slowest letters**
+   (`SourceKind::SlowLetters` → words rich in those letters), *replacing* retry-worst-words. Launched
+   with `r` from the stats screen; practice runs are excluded from all analytics.
 
 ### Phase 3 — Ghost / shadow replay
 - Capture keystroke timeline; race a prior run replayed through the same pure engine. (ADR-0004: row vs BLOB.)

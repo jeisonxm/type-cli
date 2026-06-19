@@ -15,6 +15,24 @@ pub struct CharStatRow {
     pub expected_char: String,
     pub typed_total: i64,
     pub error_count: i64,
+    /// Sum of clean inter-keystroke intervals for this letter (ms); `0` when no latency samples.
+    pub total_latency_ms: i64,
+    /// Number of latency intervals summed (the average is `total_latency_ms / latency_samples`).
+    pub latency_samples: i64,
+}
+
+impl CharStatRow {
+    /// Construct a row with no latency samples (keeps test fixtures terse; the real write path in
+    /// `app::persist_run` sets the latency fields).
+    pub fn new(expected_char: impl Into<String>, typed_total: i64, error_count: i64) -> Self {
+        Self {
+            expected_char: expected_char.into(),
+            typed_total,
+            error_count,
+            total_latency_ms: 0,
+            latency_samples: 0,
+        }
+    }
 }
 
 /// One mistyped-word row (`worst_word`).
@@ -87,9 +105,17 @@ pub fn insert_run(store: &mut Store, rec: &RunRecord) -> Result<i64> {
 
     for cs in &rec.char_stats {
         tx.execute(
-            "INSERT INTO char_stat (run_id, expected_char, typed_total, error_count)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![run_id, cs.expected_char, cs.typed_total, cs.error_count],
+            "INSERT INTO char_stat
+                (run_id, expected_char, typed_total, error_count, total_latency_ms, latency_samples)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                run_id,
+                cs.expected_char,
+                cs.typed_total,
+                cs.error_count,
+                cs.total_latency_ms,
+                cs.latency_samples,
+            ],
         )
         .context("insert char_stat")?;
     }
@@ -133,6 +159,8 @@ mod tests {
                 expected_char: "a".into(),
                 typed_total: 30,
                 error_count: 3,
+                total_latency_ms: 1500,
+                latency_samples: 10,
             }],
             worst_words: vec![WorstWordRow {
                 word: "example".into(),
@@ -179,6 +207,22 @@ mod tests {
             )
             .unwrap();
         assert_eq!(words, 1);
+    }
+
+    #[test]
+    fn insert_run_persists_latency_columns() {
+        let mut store = Store::open_in_memory().unwrap();
+        let id = insert_run(&mut store, &sample()).unwrap();
+        let (tot, n): (i64, i64) = store
+            .conn()
+            .query_row(
+                "SELECT total_latency_ms, latency_samples FROM char_stat WHERE run_id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(tot, 1500);
+        assert_eq!(n, 10);
     }
 
     #[test]

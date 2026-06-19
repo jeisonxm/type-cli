@@ -7,7 +7,7 @@ use rusqlite_migration::{Migrations, M};
 
 /// All migrations, applied in order to bring a database up to the latest schema.
 pub fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(MIGRATION_1)])
+    Migrations::new(vec![M::up(MIGRATION_1), M::up(MIGRATION_2)])
 }
 
 /// Migration 1: tables, indexes, and a seeded `local` user (id = 1).
@@ -89,4 +89,12 @@ CREATE INDEX idx_run_unsynced  ON test_run(synced_at) WHERE synced_at IS NULL;
 
 INSERT INTO user (id, username, created_at)
 VALUES (1, 'local', CAST(strftime('%s','now') AS INTEGER) * 1000);
+"#;
+
+/// Migration 2: per-letter typing latency on `char_stat`. Additive (defaulted) so existing rows stay
+/// valid; older runs simply contribute zero latency samples and are skipped by the slowest-letter
+/// aggregation (which gates on a minimum sample count).
+const MIGRATION_2: &str = r#"
+ALTER TABLE char_stat ADD COLUMN total_latency_ms INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE char_stat ADD COLUMN latency_samples INTEGER NOT NULL DEFAULT 0;
 "#;

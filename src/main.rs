@@ -203,18 +203,23 @@ fn run_stats(config: AppConfig, show_timer: bool) -> Result<()> {
 
     match outcome {
         StatsOutcome::Quit => Ok(()),
-        StatsOutcome::Retry(words) => {
-            let mode = Mode::Words { count: words.len() };
+        StatsOutcome::Practice(letters) => {
+            let language = config.settings.game.language.clone();
             run_tui(App::new(
                 config,
-                mode,
-                SourceKind::Retry(words),
+                Mode::Words {
+                    count: PRACTICE_WORDS,
+                },
+                SourceKind::SlowLetters { letters, language },
                 None,
                 show_timer,
             ))
         }
     }
 }
+
+/// Word count for a slow-letter practice drill.
+const PRACTICE_WORDS: usize = 25;
 
 /// The stats screen is static, so the loop just blocks on input until the user quits or retries.
 fn stats_loop(app: &mut StatsApp, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {

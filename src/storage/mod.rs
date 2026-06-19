@@ -4,6 +4,7 @@
 //! them. Like `config.rs`, opening the store is best-effort — callers treat a failure as "no
 //! persistence this run", never a crash.
 
+pub mod queries;
 pub mod runs;
 mod schema;
 

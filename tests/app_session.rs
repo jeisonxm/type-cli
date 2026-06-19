@@ -180,6 +180,65 @@ fn restart_produces_a_fresh_session() {
 }
 
 #[test]
+fn results_screen_renders_with_timer_visible() {
+    // With the timer toggled on, the results layout reserves a sparkline row; it must still render
+    // the one-line summary and the hint without panicking.
+    let mut app = App::new(
+        test_config(),
+        Mode::Words { count: 3 },
+        SourceKind::Random("english".into()),
+        None,
+        true, // timer visible → sparkline branch
+    );
+    let target: String = app.session.target().iter().collect();
+    for c in target.chars() {
+        app.on_key(press(c));
+    }
+    assert_eq!(app.state, AppState::Results);
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui::render(f, &app)).unwrap();
+    let text = screen_text(&terminal);
+    assert!(text.contains("wpm"), "summary still shown");
+    assert!(text.contains("again"), "hint still shown");
+}
+
+#[test]
+fn retry_source_types_the_given_words_and_persists_as_retry() {
+    let config = test_config();
+    let db_path = config.database_path();
+    let words = vec!["their".to_string(), "because".to_string()];
+
+    let mut app = App::new(
+        config,
+        Mode::Words { count: words.len() },
+        SourceKind::Retry(words),
+        None,
+        false,
+    );
+    // The retry drill's target is exactly the worst words, in order.
+    let target: String = app.session.target().iter().collect();
+    assert_eq!(target, "their because");
+
+    for c in target.chars() {
+        app.on_key(press(c));
+    }
+    assert_eq!(app.state, AppState::Results);
+
+    // It was saved with the 'retry' source tag.
+    let store = Store::open(&db_path).unwrap();
+    let src: String = store
+        .conn()
+        .query_row(
+            "SELECT source FROM test_run ORDER BY id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(src, "retry");
+}
+
+#[test]
 fn finished_runs_persist_to_the_database_across_launches() {
     let config = test_config();
     let db_path = config.database_path();

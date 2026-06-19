@@ -47,4 +47,6 @@ pub enum Command {
     Config,
     /// List the available color themes.
     Theme,
+    /// Show your typing history, most-missed keys, and a keyboard heatmap.
+    Stats,
 }

@@ -24,6 +24,8 @@ use type_cli::cli::{Cli, Command};
 use type_cli::config::AppConfig;
 use type_cli::engine::Mode;
 use type_cli::sources::{self, SourceKind};
+use type_cli::stats_app::{StatsApp, StatsOutcome};
+use type_cli::storage::Store;
 use type_cli::ui;
 
 fn main() -> Result<()> {
@@ -43,6 +45,7 @@ fn main() -> Result<()> {
             print_themes(&config);
             Ok(())
         }
+        Some(Command::Stats) => run_stats(config, show_timer),
         Some(Command::Import { path }) => {
             let text = sources::load_document(path, config.settings.game.fold_smart_punctuation)?;
             let mode = resolve_mode(&cli, &config);
@@ -174,6 +177,59 @@ fn run_tui(mut app: App) -> Result<()> {
     let result = run_loop(&mut app, &mut tui.terminal);
     drop(tui); // restore the terminal before returning (so any error prints cleanly)
     result
+}
+
+/// Show the analytics screen. If the user asks to retry the worst words, fall through to a normal
+/// typing TUI seeded from them.
+fn run_stats(config: AppConfig, show_timer: bool) -> Result<()> {
+    let outcome = {
+        let store = match Store::open(&config.database_path()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("type-cli: cannot open database ({e})");
+                return Ok(());
+            }
+        };
+        let mut stats = StatsApp::load(&store, &config.theme)?;
+        drop(store); // analytics are loaded into memory; release the DB handle.
+
+        install_panic_hook();
+        let mut tui = Tui::enter()?;
+        let result = stats_loop(&mut stats, &mut tui.terminal);
+        drop(tui); // restore the terminal before returning
+        result?;
+        stats.outcome
+    };
+
+    match outcome {
+        StatsOutcome::Quit => Ok(()),
+        StatsOutcome::Retry(words) => {
+            let mode = Mode::Words { count: words.len() };
+            run_tui(App::new(
+                config,
+                mode,
+                SourceKind::Retry(words),
+                None,
+                show_timer,
+            ))
+        }
+    }
+}
+
+/// The stats screen is static, so the loop just blocks on input until the user quits or retries.
+fn stats_loop(app: &mut StatsApp, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+    while !app.should_quit {
+        terminal.draw(|frame| {
+            let area = frame.area();
+            ui::stats_view::render(frame, app, area);
+        })?;
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                app.on_key(key);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The event-driven loop: block on input up to a ~10 Hz tick (which advances the timer), redraw,

@@ -2,6 +2,7 @@
 //! never paints a background — the terminal's own background shows through, so the game blends in.
 
 pub mod results_view;
+pub mod stats_view;
 pub mod theme;
 pub mod typing_view;
 

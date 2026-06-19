@@ -13,5 +13,6 @@ pub mod engine;
 pub mod input;
 pub mod sources;
 pub mod stats;
+pub mod stats_app;
 pub mod storage;
 pub mod ui;

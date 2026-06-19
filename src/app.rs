@@ -84,6 +84,8 @@ impl App {
             SourceKind::Pdf(_) | SourceKind::Docx(_) => {
                 sources::build_target(doc_text.unwrap_or_default(), mode, true, &mut rng)
             }
+            // A retry drill types exactly the captured worst words, in order.
+            SourceKind::Retry(words) => words.join(" ").chars().collect(),
         };
         TypingSession::new(target, mode)
     }
@@ -162,6 +164,7 @@ impl App {
             SourceKind::Random(lang) => ("random", None, Some(lang.clone())),
             SourceKind::Pdf(p) => ("pdf", Some(p.display().to_string()), None),
             SourceKind::Docx(p) => ("docx", Some(p.display().to_string()), None),
+            SourceKind::Retry(_) => ("retry", None, None),
         };
 
         let char_stats = char_tallies(self.session.history())

@@ -42,11 +42,12 @@ pub fn run_count(store: &Store) -> Result<i64> {
 
 /// The most recent `limit` runs as timeline points, oldest-first (left-to-right on the chart).
 pub fn recent_runs(store: &Store, limit: usize) -> Result<Vec<RunPoint>> {
+    // `id` breaks ties so the chart order is deterministic when two runs share `started_at`.
     let mut stmt = store.conn().prepare(
         "SELECT started_at, wpm, accuracy FROM (
-             SELECT started_at, wpm, accuracy FROM test_run
-             ORDER BY started_at DESC LIMIT ?1
-         ) ORDER BY started_at ASC",
+             SELECT id, started_at, wpm, accuracy FROM test_run
+             ORDER BY started_at DESC, id DESC LIMIT ?1
+         ) ORDER BY started_at ASC, id ASC",
     )?;
     let rows = stmt
         .query_map([limit as i64], |r| {
@@ -88,7 +89,7 @@ pub fn key_aggregates(store: &Store, min_sample: i64) -> Result<Vec<KeyAgg>> {
 pub fn most_recent_worst_words(store: &Store, limit: usize) -> Result<Vec<String>> {
     let mut stmt = store.conn().prepare(
         "SELECT word FROM worst_word
-         WHERE run_id = (SELECT id FROM test_run ORDER BY started_at DESC LIMIT 1)
+         WHERE run_id = (SELECT id FROM test_run ORDER BY started_at DESC, id DESC LIMIT 1)
          ORDER BY rank ASC LIMIT ?1",
     )?;
     let rows = stmt
@@ -183,5 +184,28 @@ mod tests {
         insert_run(&mut s, &run(999, 80.0)).unwrap(); // latest
         let words = most_recent_worst_words(&s, 10).unwrap();
         assert_eq!(words, vec!["the"]);
+    }
+
+    #[test]
+    fn latest_run_breaks_started_at_ties_by_id() {
+        let mut s = Store::open_in_memory().unwrap();
+        let mut first = run(500, 70.0);
+        first.worst_words = vec![WorstWordRow {
+            word: "first".into(),
+            error_count: 1,
+            word_wpm: None,
+            rank: 1,
+        }];
+        let mut second = run(500, 80.0); // same started_at, inserted later → higher id
+        second.worst_words = vec![WorstWordRow {
+            word: "second".into(),
+            error_count: 1,
+            word_wpm: None,
+            rank: 1,
+        }];
+        insert_run(&mut s, &first).unwrap();
+        insert_run(&mut s, &second).unwrap();
+        let words = most_recent_worst_words(&s, 10).unwrap();
+        assert_eq!(words, vec!["second"], "tie broken by id → later run wins");
     }
 }

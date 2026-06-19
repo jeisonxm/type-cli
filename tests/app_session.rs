@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
+use ratatui::style::Modifier;
 use ratatui::Terminal;
 
 use type_cli::app::{App, AppState};
@@ -117,6 +118,39 @@ fn ctrl_t_toggles_the_discreet_timer() {
         screen_text(&terminal).contains("60s"),
         "timer shows full duration before the first keystroke"
     );
+}
+
+#[test]
+fn mistyped_chars_are_never_underlined() {
+    // Errors are coloured, never UNDERLINED: the underline modifier makes ratatui emit underline /
+    // underline-colour SGR (ESC[4m, ESC[59m) that legacy consoles mis-parse and corrupt. Guard it.
+    let mut app = App::new(
+        test_config(),
+        Mode::Words { count: 3 },
+        SourceKind::Random("english".into()),
+        None,
+        false,
+    );
+    // Type a wrong character at position 0 (anything different from the expected char).
+    let expected = app.session.target()[0];
+    let wrong = if expected == 'x' { 'z' } else { 'x' };
+    app.on_key(press(wrong));
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui::render(f, &app)).unwrap();
+
+    let buf = terminal.backend().buffer();
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            assert!(
+                !buf[(x, y)]
+                    .style()
+                    .add_modifier
+                    .contains(Modifier::UNDERLINED),
+                "no cell on the typing screen may be underlined (cell {x},{y})"
+            );
+        }
+    }
 }
 
 #[test]

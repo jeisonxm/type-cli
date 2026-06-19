@@ -6,6 +6,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-19
+
+### Changed
+- **Mistyped characters are now signalled by colour alone (no underline).** The `UNDERLINED` modifier
+  made ratatui emit the underline SGR `ESC[4m` on every error cell; dropping it removes that escape,
+  simplifies the error signal, and is more stealth. (Defence-in-depth / lower escape surface on
+  minimal consoles — the actual "frozen terminal after a mistype" bug was the cursor not being
+  restored on exit, fixed in 0.1.2. The `ESC[39m ESC[49m ESC[59m ESC[0m` reset tail seen in that
+  leak is ratatui's normal per-frame reset, emitted regardless of styling.)
+
 ## [0.1.2] - 2026-06-19
 
 ### Fixed

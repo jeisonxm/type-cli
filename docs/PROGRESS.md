@@ -3,7 +3,8 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-19 — v0.1.2 bugfix: terminal cursor restored on exit (was left hidden)._
+_Last updated: 2026-06-19 — v0.1.3: error styling is colour-only (no underline); v0.1.2 restored the
+exit cursor (the real "frozen terminal" fix)._
 
 ---
 
@@ -17,7 +18,7 @@ _Last updated: 2026-06-19 — v0.1.2 bugfix: terminal cursor restored on exit (w
 - **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf`.
   In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
 - **Build/release/ops:** see [`DEVELOPMENT.md`](DEVELOPMENT.md). Public repo:
-  github.com/jeisonxm/type-cli · latest release **v0.1.2** (standalone Windows `.exe`).
+  github.com/jeisonxm/type-cli · latest release **v0.1.3** (standalone Windows `.exe`).
   NOTE: `.github/workflows/ci.yml` exists on disk but is **not pushed** — the `gh` token lacks the
   `workflow` scope. To enable CI: `gh auth refresh -s workflow -h github.com`, then track & push it.
 
@@ -25,6 +26,12 @@ _Last updated: 2026-06-19 — v0.1.2 bugfix: terminal cursor restored on exit (w
 
 ## Done (lo que se crea)
 
+- **2026-06-19** — **v0.1.3: error styling is colour-only (dropped `UNDERLINED`).** The underline
+  modifier made ratatui emit `ESC[4m` on every error cell; removing it lowers the escape surface on
+  minimal consoles and is more stealth. Verified via a real-pty byte audit: `ESC[4m` 0 (was 2412),
+  no parser desync. Note: this is hardening — the "frozen terminal after a mistype" was v0.1.2's
+  cursor-restore fix; the `ESC[…m` reset tail in the leak is ratatui's normal per-frame reset, not the
+  underline. Guarded by a new test (`mistyped_chars_are_never_underlined`). 55 tests green.
 - **2026-06-19** — **Bugfix v0.1.2: terminal cursor left hidden on exit.** ratatui hides the cursor
   every frame and the teardown never re-showed it, so after a mistype the terminal looked "frozen"
   (the leak ended in `␛[?25l`). Teardown now restores the cursor (`Show`) on both the RAII-drop and

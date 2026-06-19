@@ -83,9 +83,11 @@ fn word_progress(app: &App) -> usize {
 fn styled_char(ch: char, state: CharState, theme: &Theme) -> Span<'static> {
     let style = match state {
         CharState::Correct => Style::new().fg(theme.correct),
-        CharState::Incorrect => Style::new()
-            .fg(theme.error)
-            .add_modifier(Modifier::UNDERLINED),
+        // Errors are signalled by colour alone — no UNDERLINED. The underline modifier makes
+        // ratatui emit underline / underline-colour SGR (`ESC[4m`, `ESC[59m`) which older consoles
+        // (e.g. legacy Windows conhost) mis-parse and corrupt the render. Colour is enough and is
+        // also the more stealth-appropriate signal.
+        CharState::Incorrect => Style::new().fg(theme.error),
         // A reversed cell mimics the terminal's own block cursor.
         CharState::Caret => Style::new().add_modifier(Modifier::REVERSED),
         CharState::Untyped => Style::new().fg(theme.untyped),

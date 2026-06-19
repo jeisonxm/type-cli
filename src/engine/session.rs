@@ -271,6 +271,14 @@ impl TypingSession {
             .count()
     }
 
+    /// Target positions the cursor passed but left untyped (skipped by a mid-word space).
+    pub fn missed_chars(&self) -> usize {
+        self.typed[..self.cursor]
+            .iter()
+            .filter(|s| s.is_none())
+            .count()
+    }
+
     /// All non-backspace keystrokes (drives raw WPM and the accuracy denominator).
     pub fn typed_keystrokes(&self) -> usize {
         self.history.iter().filter(|k| !k.is_backspace).count()

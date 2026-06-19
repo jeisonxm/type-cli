@@ -3,17 +3,22 @@
 > Read this first. Update it last (see the ritual in `CLAUDE.md`).
 > Three buckets: **lo que se crea (Done) / lo que hace falta (Missing) / en lo que vamos (Now)**.
 
-_Last updated: 2026-06-19 — v0.1.3: error styling is colour-only (no underline); v0.1.2 restored the
-exit cursor (the real "frozen terminal" fix)._
+_Last updated: 2026-06-19 — Phase 2 PR1 (persistence) landed on branch `feat/phase2-persistence`:
+SQLite store + migrations + every finished run is saved._
 
 ---
 
 ## Now (en lo que vamos)
 
-- **Phase:** 1 (MVP) ✅ + **stealth UI** ✅. Next up: Phase 2 (persistence + stats/charts).
-- **In flight:** nothing. Ready to start P2 (SQLite via `rusqlite` bundled + `rusqlite_migration`).
-- **Last decision:** **stealth-only UI** (ADR-0002) — the mission is to look like normal terminal work
-  while practicing. No figlet/background/chrome; timer hidden + Ctrl+T toggle; one-line results.
+- **Phase:** 2 (persistence + stats/charts). **PR1 (persistence) ✅** done; **PR2 (stats TUI +
+  retry + sparkline)** is next.
+- **In flight:** nothing committed yet — PR1 code is on branch `feat/phase2-persistence`
+  (uncommitted), ready to commit/open a PR.
+- **Last decision (P2):** stats will be a **full TUI** (Chart + BarChart + QWERTY heatmap), an
+  *opt-in* exception to stealth (only when `type-cli stats` is invoked); results screen gains a
+  discreet **WPM/sec sparkline** gated behind the timer toggle. To be recorded in **ADR-0003** (PR2).
+- **Prior decision:** **stealth-only UI** (ADR-0002) — look like normal terminal work while
+  practicing. No figlet/background/chrome; timer hidden + Ctrl+T toggle; one-line results.
 - **Blockers:** none.
 - **How to play:** `cargo run -- --time 60` · `--words 100` · `--show-timer` · `import file.pdf`.
   In-game: type along · `Ctrl+T` show/hide timer · `Tab` restart · `Esc` quit.
@@ -26,6 +31,14 @@ exit cursor (the real "frozen terminal" fix)._
 
 ## Done (lo que se crea)
 
+- **2026-06-19** — **Phase 2 · PR1: persistence (branch `feat/phase2-persistence`).** SQLite via
+  `rusqlite` (bundled) + `rusqlite_migration`. New `storage/` shell module (kept out of the pure
+  core): `Store::open` applies WAL/NORMAL/foreign_keys pragmas + runs migration 1 (full schema from
+  `ARCHITECTURE.md` + seeded `local` user); `insert_run` writes `test_run` + `char_stat` +
+  `worst_word` in one transaction. Pure stats extended: `Summary` gains `missed_chars`/`extra_chars`;
+  `stats::keystats::worst_words(session)` ranks mistyped words with per-word WPM. `App` opens the DB
+  (best-effort; failure → persistence off, never a crash) and persists in `maybe_finish`. 64 tests
+  green (incl. e2e: a finished run survives a relaunch), clippy/fmt clean. **Not yet committed.**
 - **2026-06-19** — **v0.1.3: error styling is colour-only (dropped `UNDERLINED`).** The underline
   modifier made ratatui emit `ESC[4m` on every error cell; removing it lowers the escape surface on
   minimal consoles and is more stealth. Verified via a real-pty byte audit: `ESC[4m` 0 (was 2412),
@@ -67,13 +80,17 @@ exit cursor (the real "frozen terminal" fix)._
 
 ## Missing (lo que hace falta) — ordered
 
-### Phase 2 — Persistence, stats & charts (next)
-1. Add `rusqlite` (bundled) + `rusqlite_migration`; create `storage/` with the schema in
-   `docs/ARCHITECTURE.md` (migration 1 seeds a `local` user). _Acceptance: migrations idempotent from empty DB._
-2. Persist each finished run + `char_stat` + `worst_word`. _Acceptance: runs survive across launches._
-3. `type-cli stats`: WPM/accuracy-over-time `Chart`, daily buckets, `BarChart` of most-failed keys,
-   keyboard heatmap (colored Spans over QWERTY). _Acceptance: history + most-failed key render (min-sample gated)._
-4. "Retry worst words" → start a session from a run's worst words. _Acceptance: retry flow works._
+### Phase 2 — Persistence, stats & charts (in progress)
+1. ✅ **Done (PR1).** `rusqlite` (bundled) + `rusqlite_migration`; `storage/` with the schema from
+   `docs/ARCHITECTURE.md` (migration 1 seeds a `local` user). Migrations idempotent from empty DB.
+2. ✅ **Done (PR1).** Each finished run + `char_stat` + `worst_word` is persisted; runs survive
+   across launches (e2e test).
+3. **PR2 (next):** `type-cli stats` — WPM/accuracy-over-time `Chart`, daily buckets, `BarChart` of
+   most-failed keys, keyboard heatmap (colored Spans over QWERTY). Plus a discreet WPM/sec sparkline
+   on the results screen (timer-gated). _Acceptance: history + most-failed key render (min-sample gated)._
+   Add **ADR-0003** (stats visualization is an opt-in exception to ADR-0002).
+4. **PR2:** "Retry worst words" → start a session from a run's worst words (`SourceKind::Retry`).
+   _Acceptance: retry flow works._
 
 ### Phase 3 — Ghost / shadow replay
 - Capture keystroke timeline; race a prior run replayed through the same pure engine. (ADR-0004: row vs BLOB.)

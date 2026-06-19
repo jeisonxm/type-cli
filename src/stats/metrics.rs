@@ -94,6 +94,11 @@ pub struct Summary {
     pub consistency: f64,
     pub correct_chars: usize,
     pub incorrect_chars: usize,
+    /// Target positions skipped (cursor passed, left untyped) by a mid-word space.
+    pub missed_chars: usize,
+    /// Characters typed beyond the target's end. Always `0` today (the engine refuses input past the
+    /// last position); kept for the `test_run.chars_extra` column and monkeytype parity.
+    pub extra_chars: usize,
     pub typed_chars: usize,
     pub elapsed: Duration,
 }
@@ -111,6 +116,8 @@ impl Summary {
             consistency: consistency(&per_second_raw_wpm(session.history())),
             correct_chars,
             incorrect_chars: session.incorrect_chars(),
+            missed_chars: session.missed_chars(),
+            extra_chars: 0,
             typed_chars,
             elapsed,
         }
@@ -167,5 +174,17 @@ mod tests {
         assert!((sum.accuracy - 100.0).abs() < 1e-9);
         // elapsed measured from first keystroke (t=0) to now=4s.
         assert_eq!(sum.elapsed, Duration::from_secs(4));
+        assert_eq!(sum.missed_chars, 0);
+        assert_eq!(sum.extra_chars, 0);
+    }
+
+    #[test]
+    fn summary_counts_missed_chars_from_space_skip() {
+        // "cat dog": type 'c' then a space → skips "at" (2 missed), accepts the space.
+        let mut s = TypingSession::from_str("cat dog", Mode::Words { count: 2 });
+        s.apply(Action::Type('c'), Duration::ZERO);
+        s.apply(Action::Type(' '), Duration::ZERO);
+        let sum = Summary::compute(&s, Duration::from_secs(1));
+        assert_eq!(sum.missed_chars, 2); // 'a' and 't' left untyped behind the cursor
     }
 }

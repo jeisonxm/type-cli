@@ -1,7 +1,7 @@
 //! Integration test: drive a full typing session through `App` and render every screen headlessly
 //! with ratatui's `TestBackend`. Exercises the engine → app → ui path (stealth UI) without a tty.
 
-use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
@@ -12,15 +12,21 @@ use type_cli::app::{App, AppState};
 use type_cli::config::{AppConfig, Settings};
 use type_cli::engine::Mode;
 use type_cli::sources::SourceKind;
+use type_cli::storage::Store;
 use type_cli::ui;
 use type_cli::ui::theme::Theme;
 
+/// Each test gets its own isolated data dir so the persisted SQLite DB never collides across the
+/// (parallel) test threads — avoids a first-migration race on a shared file.
 fn test_config() -> AppConfig {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let base = std::env::temp_dir().join(format!("type-cli-test-{}-{n}", std::process::id()));
     AppConfig {
         settings: Settings::embedded_default(),
         theme: Theme::fallback(),
-        config_dir: PathBuf::from("/tmp/type-cli-test/config"),
-        data_dir: PathBuf::from("/tmp/type-cli-test/data"),
+        config_dir: base.join("config"),
+        data_dir: base.join("data"),
     }
 }
 
@@ -171,4 +177,43 @@ fn restart_produces_a_fresh_session() {
         "a fresh session has no keystrokes yet"
     );
     assert!(app.summary.is_none());
+}
+
+#[test]
+fn finished_runs_persist_to_the_database_across_launches() {
+    let config = test_config();
+    let db_path = config.database_path();
+
+    // Launch 1: play a full 3-word run to completion → it must be persisted on finish.
+    {
+        let mut app = App::new(
+            config.clone(),
+            Mode::Words { count: 3 },
+            SourceKind::Random("english".into()),
+            None,
+            false,
+        );
+        let target: String = app.session.target().iter().collect();
+        for c in target.chars() {
+            app.on_key(press(c));
+        }
+        assert_eq!(app.state, AppState::Results);
+    } // app dropped → its DB handle is closed (simulates quitting the binary)
+
+    // Launch 2: a brand-new App on the same data dir (simulates relaunching). Must not clobber.
+    drop(App::new(
+        config.clone(),
+        Mode::Words { count: 3 },
+        SourceKind::Random("english".into()),
+        None,
+        false,
+    ));
+
+    // The run written in launch 1 survived both the close and the relaunch.
+    let store = Store::open(&db_path).expect("reopen db");
+    let runs: i64 = store
+        .conn()
+        .query_row("SELECT COUNT(*) FROM test_run", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(runs, 1, "the finished run persisted across launches");
 }

@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 
 use crate::engine::session::Keystroke;
+use crate::engine::TypingSession;
 
 /// Attempts and errors for one expected character.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +15,19 @@ pub struct CharTally {
     pub expected: char,
     pub typed_total: u32,
     pub error_count: u32,
+}
+
+/// A target word the player struggled with, ranked worst-first. Persisted as `worst_word` and used
+/// to seed the "retry worst words" session in Phase 2.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorstWord {
+    pub word: String,
+    pub error_count: u32,
+    /// WPM over the span of keystrokes inside the word; `None` when it can't be measured
+    /// (fewer than two keystrokes, or zero elapsed between them).
+    pub word_wpm: Option<f64>,
+    /// 1-based position in the worst-first ordering.
+    pub rank: u32,
 }
 
 /// Aggregate keystrokes by the character that was expected, sorted worst-first
@@ -53,6 +67,69 @@ pub fn most_failed_key(history: &[Keystroke]) -> Option<char> {
         .map(|t| t.expected)
 }
 
+/// Words the player mistyped, ranked worst-first (most errors, then alphabetical). Only words with
+/// at least one error are returned. `word_wpm` is measured over the keystrokes that landed inside
+/// the word's target span.
+pub fn worst_words(session: &TypingSession) -> Vec<WorstWord> {
+    let target = session.target();
+    let history = session.history();
+
+    // Split the target into word spans [start, end) of non-space runs.
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < target.len() {
+        if target[i] == ' ' {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < target.len() && target[i] != ' ' {
+            i += 1;
+        }
+        spans.push((start, i));
+    }
+
+    let mut out: Vec<WorstWord> = Vec::new();
+    for (start, end) in spans {
+        let strokes: Vec<&Keystroke> = history
+            .iter()
+            .filter(|k| !k.is_backspace && k.index >= start && k.index < end)
+            .collect();
+        let error_count = strokes.iter().filter(|k| !k.correct).count() as u32;
+        if error_count == 0 {
+            continue;
+        }
+        let word: String = target[start..end].iter().collect();
+        let word_wpm = word_wpm_over(&strokes, word.chars().count());
+        out.push(WorstWord {
+            word,
+            error_count,
+            word_wpm,
+            rank: 0,
+        });
+    }
+
+    out.sort_by(|a, b| b.error_count.cmp(&a.error_count).then(a.word.cmp(&b.word)));
+    for (idx, w) in out.iter_mut().enumerate() {
+        w.rank = idx as u32 + 1;
+    }
+    out
+}
+
+/// WPM across a word's keystrokes: `(chars / 5) / minutes`, spanning first→last keystroke.
+fn word_wpm_over(strokes: &[&Keystroke], char_len: usize) -> Option<f64> {
+    if strokes.len() < 2 {
+        return None;
+    }
+    let t0 = strokes.iter().map(|k| k.t_offset).min()?;
+    let t1 = strokes.iter().map(|k| k.t_offset).max()?;
+    let minutes = (t1 - t0).as_secs_f64() / 60.0;
+    if minutes <= 0.0 {
+        return None;
+    }
+    Some((char_len as f64 / 5.0) / minutes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +166,46 @@ mod tests {
     fn no_errors_means_no_most_failed_key() {
         let h = typed_history("abc", "abc");
         assert_eq!(most_failed_key(&h), None);
+    }
+
+    fn typed_session(target: &str, typed: &str) -> TypingSession {
+        let mut s = TypingSession::from_str(target, Mode::Words { count: 99 });
+        for (i, c) in typed.chars().enumerate() {
+            s.apply(Action::Type(c), Duration::from_secs(i as u64));
+        }
+        s
+    }
+
+    #[test]
+    fn worst_words_ranks_only_mistyped_words() {
+        // "cat dog sun": miss in "cat" (t→d) and "dog" (o→x); "sun" is clean.
+        let s = typed_session("cat dog sun", "cad dxg sun");
+        let w = worst_words(&s);
+        let words: Vec<&str> = w.iter().map(|x| x.word.as_str()).collect();
+        assert_eq!(words, vec!["cat", "dog"]); // "sun" excluded (no errors)
+        assert_eq!(w[0].rank, 1);
+        assert_eq!(w[1].rank, 2);
+        assert!(w.iter().all(|x| x.error_count == 1));
+    }
+
+    #[test]
+    fn worst_words_sorts_by_error_count_first() {
+        // "aaa bb": "aaa" gets 2 errors, "bb" gets 1 → "aaa" ranks first despite alpha order.
+        let s = typed_session("aaa bb", "axx bx");
+        let w = worst_words(&s);
+        assert_eq!(w[0].word, "aaa");
+        assert_eq!(w[0].error_count, 2);
+        assert_eq!(w[1].word, "bb");
+        assert_eq!(w[1].error_count, 1);
+    }
+
+    #[test]
+    fn worst_words_measures_word_wpm() {
+        // 1 char/sec: "ab" spans t=0..1 (1s). word_wpm = (2/5)/(1/60) = 24.
+        let s = typed_session("ab cd", "xb cd");
+        let w = worst_words(&s);
+        assert_eq!(w.len(), 1);
+        let wpm = w[0].word_wpm.expect("two strokes → measurable");
+        assert!((wpm - 24.0).abs() < 1e-6, "got {wpm}");
     }
 }

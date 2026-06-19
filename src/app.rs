@@ -2,7 +2,7 @@
 //! transitions between typing and results. The clock lives here (the impure shell), not in the
 //! engine — `App` reads `Instant::now()` and passes a plain `Duration` down to the pure engine.
 
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::KeyEvent;
 
@@ -10,7 +10,9 @@ use crate::config::AppConfig;
 use crate::engine::{Action, Mode, TypingSession};
 use crate::input;
 use crate::sources::{self, wordlist, SourceKind};
+use crate::stats::keystats::{char_tallies, worst_words};
 use crate::stats::Summary;
+use crate::storage::{insert_run, CharStatRow, RunRecord, Store, WorstWordRow};
 
 /// Which screen the app is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +37,8 @@ pub struct App {
     /// Clock baseline for the current session.
     session_start: Instant,
     pub should_quit: bool,
+    /// Open database handle, or `None` when persistence is unavailable (game still plays).
+    store: Option<Store>,
 }
 
 impl App {
@@ -46,6 +50,14 @@ impl App {
         show_timer: bool,
     ) -> Self {
         let session = Self::make_session(&source, doc_text.as_deref(), mode);
+        // Best-effort: a missing/locked DB disables persistence but never blocks play.
+        let store = match Store::open(&config.database_path()) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                eprintln!("type-cli: persistence disabled ({e})");
+                None
+            }
+        };
         App {
             config,
             mode,
@@ -57,6 +69,7 @@ impl App {
             show_timer,
             session_start: Instant::now(),
             should_quit: false,
+            store,
         }
     }
 
@@ -128,8 +141,77 @@ impl App {
 
     fn maybe_finish(&mut self) {
         if self.state == AppState::Typing && self.session.is_finished() {
-            self.summary = Some(Summary::compute(&self.session, self.elapsed()));
+            let summary = Summary::compute(&self.session, self.elapsed());
+            self.summary = Some(summary);
             self.state = AppState::Results;
+            self.persist_run(&summary);
+        }
+    }
+
+    /// Write the just-finished run to the database (best-effort; a write error is logged, not fatal).
+    fn persist_run(&mut self, summary: &Summary) {
+        let Some(store) = self.store.as_mut() else {
+            return;
+        };
+
+        let (mode, target) = match self.mode {
+            Mode::Time { secs } => ("time", secs as i64),
+            Mode::Words { count } => ("words", count as i64),
+        };
+        let (source, source_ref, language) = match &self.source {
+            SourceKind::Random(lang) => ("random", None, Some(lang.clone())),
+            SourceKind::Pdf(p) => ("pdf", Some(p.display().to_string()), None),
+            SourceKind::Docx(p) => ("docx", Some(p.display().to_string()), None),
+        };
+
+        let char_stats = char_tallies(self.session.history())
+            .into_iter()
+            .map(|t| CharStatRow {
+                expected_char: t.expected.to_string(),
+                typed_total: t.typed_total as i64,
+                error_count: t.error_count as i64,
+            })
+            .collect();
+        let worst = worst_words(&self.session)
+            .into_iter()
+            .take(10)
+            .map(|w| WorstWordRow {
+                word: w.word,
+                error_count: w.error_count as i64,
+                word_wpm: w.word_wpm,
+                rank: w.rank as i64,
+            })
+            .collect();
+
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let elapsed_ms = summary.elapsed.as_millis() as i64;
+
+        let rec = RunRecord {
+            mode,
+            target,
+            source,
+            source_ref,
+            language,
+            wpm: summary.wpm,
+            raw_wpm: summary.raw_wpm,
+            accuracy: summary.accuracy,
+            consistency: Some(summary.consistency),
+            chars_correct: summary.correct_chars as i64,
+            chars_incorrect: summary.incorrect_chars as i64,
+            chars_extra: summary.extra_chars as i64,
+            chars_missed: summary.missed_chars as i64,
+            elapsed_ms,
+            started_at: now_ms - elapsed_ms,
+            created_at: now_ms,
+            char_stats,
+            worst_words: worst,
+        };
+
+        if let Err(e) = insert_run(store, &rec) {
+            eprintln!("type-cli: could not save run ({e})");
         }
     }
 }
